@@ -574,7 +574,7 @@ function App() {
           <div className="lg:col-span-9">
             
             <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-              <h2 className="text-2xl font-bold text-slate-900">Live Job Matches (>75%)</h2>
+              <h2 className="text-2xl font-bold text-slate-900">Live Job Matches ({'>75%'})</h2>
               <div className="text-sm text-slate-500 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
                  <Search size={14} /> Found {matchedJobs.length} matches
               </div>
