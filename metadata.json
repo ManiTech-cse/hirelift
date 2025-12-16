@@ -1,0 +1,5 @@
+{
+  "name": "HireLift",
+  "description": "An AI-powered job matching and auto-apply platform that connects candidates with verified opportunities using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
