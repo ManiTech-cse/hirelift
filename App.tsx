@@ -570,7 +570,6 @@ function App() {
             </Button>
           </div>
 
-          {/* Main Content Area */}
           <div className="lg:col-span-9">
             
             <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
