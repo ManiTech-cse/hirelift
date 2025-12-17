@@ -2,7 +2,11 @@ import { GoogleGenAI } from "@google/genai";
 import { UserProfile, MatchingResponse, CompanyDetails } from "../types";
 import { AVAILABLE_JOBS } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = "AIzaSyBG9UdclpbBt0RZ3lbIlmCSEJXcJHITi_A";
+if (!apiKey) {
+  throw new Error("VITE_GOOGLE_GENAI_API_KEY must be set in your .env file or environment variables.");
+}
+const ai = new GoogleGenAI({ apiKey });
 
 export const matchJobsWithProfile = async (
   profile: UserProfile
