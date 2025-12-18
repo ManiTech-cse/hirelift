@@ -8,6 +8,7 @@ export interface JobFilters {
   salaryMin?: number;
   salaryMax?: number;
   remote: boolean;
+  workdayOnly?: boolean; // Filter for Workday jobs only
 }
 
 interface JobFilterPanelProps {
@@ -40,8 +41,7 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
     } else {
       onFilterChange({ ...filters, salaryMax: value });
     }
-  };
-  const handleReset = () => {
+  };  const handleReset = () => {
     onFilterChange({
       matchPercentage: 0,
       jobType: [],
@@ -49,6 +49,7 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
       salaryMin: undefined,
       salaryMax: undefined,
       remote: false,
+      workdayOnly: false,
     });
   };
 
@@ -159,7 +160,20 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
                 onChange={(e) => handleSalaryChange('max', Number(e.target.value))}
                 className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-            </div>
+            </div>          </div>
+
+          {/* Workday Filter */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.workdayOnly || false}
+                onChange={(e) => onFilterChange({ ...filters, workdayOnly: e.target.checked })}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <span className="text-sm text-slate-700 font-medium">🤖 Workday Auto-Apply Only</span>
+            </label>
+            <p className="text-xs text-slate-500 mt-1 ml-6">Show only jobs with auto-apply support</p>
           </div>
 
           {/* Reset Button */}
