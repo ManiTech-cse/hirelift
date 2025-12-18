@@ -50,9 +50,8 @@ function App() {
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
     // New state for bot simulation  const [activeBotJob, setActiveBotJob] = useState<string | null>(null);
   const [botStep, setBotStep] = useState<string>("");
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [jobFilters, setJobFilters] = useState<JobFilters>({
-    matchPercentage: 50,
+  const [resumeFile, setResumeFile] = useState<File | null>(null);  const [jobFilters, setJobFilters] = useState<JobFilters>({
+    matchPercentage: 0,  // Start at 0 to show all jobs by default
     jobType: [],
     visaSponsorship: false,
     remote: false,
@@ -909,11 +908,10 @@ function App() {
                       <Search size={24} className="sm:w-8 sm:h-8" />
                     </div>
                     <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found with current filters</h3>
-                    <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>
-                    <Button 
+                    <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>                    <Button 
                       variant="outline" 
                       onClick={() => setJobFilters({
-                        matchPercentage: 50,
+                        matchPercentage: 0,
                         jobType: [],
                         visaSponsorship: false,
                         remote: false,

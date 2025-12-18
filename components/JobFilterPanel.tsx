@@ -41,10 +41,9 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
       onFilterChange({ ...filters, salaryMax: value });
     }
   };
-
   const handleReset = () => {
     onFilterChange({
-      matchPercentage: 50,
+      matchPercentage: 0,
       jobType: [],
       visaSponsorship: false,
       salaryMin: undefined,
@@ -54,7 +53,7 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
   };
 
   const hasActiveFilters = 
-    filters.matchPercentage > 50 || 
+    filters.matchPercentage > 0 || 
     filters.jobType.length > 0 || 
     filters.visaSponsorship || 
     filters.remote ||
@@ -83,20 +82,19 @@ export const JobFilterPanel: React.FC<JobFilterPanelProps> = ({
         <div className="border-t border-slate-200 p-4 space-y-4">
           
           {/* Match Percentage */}
-          <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-2">
+          <div>            <label className="text-sm font-semibold text-slate-700 block mb-2">
               Minimum Match: {filters.matchPercentage}%
             </label>
             <input
               type="range"
-              min="50"
+              min="0"
               max="100"
               value={filters.matchPercentage}
               onChange={(e) => handleMatchPercentageChange(Number(e.target.value))}
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
             <div className="flex justify-between text-xs text-slate-500 mt-1">
-              <span>50%</span>
+              <span>0%</span>
               <span>100%</span>
             </div>
           </div>
