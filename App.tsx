@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
-import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail } from './services/emailService';
+import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail, initializeEmailService } from './services/emailService';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
@@ -58,6 +58,16 @@ function App() {
     visaSponsorship: false,
     remote: false,
   });
+
+  useEffect(() => {
+    initializeEmailService();
+  }, []);
+
+  // Initialize email service on component mount
+  useEffect(() => {
+    initializeEmailService();
+    console.log('HireLift App initialized with email service');
+  }, []);
 
   // Simple strong password generator
   const generateStrongPassword = () => {
@@ -367,8 +377,7 @@ function App() {
       next.delete(jobId);
       return next;
     });
-    
-    // Send confirmation email
+      // Send confirmation email
     const emailSent = await sendApplicationConfirmationEmail(
       profile,
       job,
@@ -376,9 +385,9 @@ function App() {
     );
 
     if (emailSent) {
-      showToast(`✅ Confirmation email sent to ${profile.email}`);
+      showToast(`✅ Email sent to ${profile.email} - Check your inbox!`);
     } else {
-      showToast(`Application submitted! (Email notification pending)`, 'success');
+      showToast(`✅ Application submitted! Email backed up locally`, 'success');
     }
     
     // Clean up iframe
