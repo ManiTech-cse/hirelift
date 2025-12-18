@@ -359,11 +359,11 @@ function App() {
       };
     });
   };
-
   // --- Landing Page Render ---
   if (appState === 'LANDING') {
     return (
-      <div className="min-h-screen relative bg-white overflow-hidden text-slate-900">        {/* Sticky Nav Bar - Responsive */}
+      <div className="min-h-screen relative bg-white overflow-hidden text-slate-900">
+        {/* Sticky Nav Bar - Responsive */}
         <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
