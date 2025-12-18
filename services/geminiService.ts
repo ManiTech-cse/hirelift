@@ -99,28 +99,72 @@ export const matchJobsWithProfile = async (
 
 export const generateCoverLetter = async (profile: UserProfile): Promise<string> => {
   try {
-    const prompt = `
-      Write a professional cover letter.
-      Candidate: ${profile.name}
-      Role: ${profile.preferredRoles.join(", ")}
-      Skills: ${profile.skills.join(", ")}
-      
-      Start with "Dear Hiring Manager,".
-      Keep it professional and under 200 words.
-      Mention specific skills from the list above.
-      Use [Company Name] as a placeholder.
-    `;
+    // Validate profile data
+    if (!profile.name || !profile.preferredRoles.length || !profile.skills.length) {
+      console.warn('Incomplete profile data for cover letter generation');
+      return getDefaultCoverLetter(profile);
+    }
+
+    const prompt = `You are a professional resume writer. Write a compelling cover letter for this candidate.
+
+Candidate Information:
+- Name: ${profile.name}
+- Target Roles: ${profile.preferredRoles.join(", ")}
+- Key Skills: ${profile.skills.join(", ")}
+- Experience Level: ${profile.experience}
+- Availability: ${profile.availability || "Immediate"}
+
+Requirements:
+1. Start with "Dear Hiring Manager,"
+2. Keep it professional and concise (150-200 words)
+3. Highlight 2-3 key skills from the list above
+4. Show enthusiasm for the role
+5. Include a strong closing statement
+6. Use [Company Name] as placeholder for company name
+7. Format it as a proper business letter
+
+Generate the cover letter now:`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        temperature: 0.7,
+      }
     });
 
-    return response.text || "";
+    const letter = response.text?.trim() || "";
+    
+    // Validate response
+    if (!letter || letter.length < 50) {
+      console.warn('Generated letter too short, using default');
+      return getDefaultCoverLetter(profile);
+    }
+
+    return letter;
   } catch (error) {
     console.error("Error generating cover letter:", error);
-    return "";
+    return getDefaultCoverLetter(profile);
   }
+};
+
+/**
+ * Generate a professional default cover letter if AI generation fails
+ */
+const getDefaultCoverLetter = (profile: UserProfile): string => {
+  const topSkills = profile.skills.slice(0, 3).join(", ");
+  const role = profile.preferredRoles[0] || "the position";
+  
+  return `Dear Hiring Manager,
+
+I am writing to express my strong interest in the ${role} position at [Company Name]. With ${profile.experience} of professional experience and expertise in ${topSkills}, I am confident in my ability to contribute meaningfully to your team.
+
+Throughout my career, I have developed a passion for creating impactful solutions and working collaboratively with diverse teams. My technical skills combined with my dedication to continuous learning make me an excellent fit for your organization.
+
+I would welcome the opportunity to discuss how my background, skills, and enthusiasm can benefit [Company Name]. Thank you for considering my application. I look forward to the possibility of speaking with you soon.
+
+Sincerely,
+${profile.name}`;
 };
 
 export const fetchCompanyDetails = async (companyName: string): Promise<CompanyDetails | null> => {
