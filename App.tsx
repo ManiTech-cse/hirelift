@@ -45,12 +45,13 @@ function App() {
   const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);  const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
-    // New state for bot simulation  const [activeBotJob, setActiveBotJob] = useState<string | null>(null);
+  // New state for bot simulation
+  const [activeBotJob, setActiveBotJob] = useState<string | null>(null);
   const [botStep, setBotStep] = useState<string>("");
-  const [resumeFile, setResumeFile] = useState<File | null>(null);  const [jobFilters, setJobFilters] = useState<JobFilters>({
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [jobFilters, setJobFilters] = useState<JobFilters>({
     matchPercentage: 0,  // Start at 0 to show all jobs by default
     jobType: [],
     visaSponsorship: false,
@@ -68,10 +69,10 @@ function App() {
   const handleSuggestPassword = () => {
     const pw = generateStrongPassword();
     setSuggestedPassword(pw);
-    setAuthPassword(pw);
-  };
+    setAuthPassword(pw);  };
 
-  // Compute a simple match score between a Job and the user's (or demo) profile  const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
+  // Compute a simple match score between a Job and the user's (or demo) profile
+  const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
     const skillMatches = job.required_skills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
     const totalSkillsRequired = Math.max(1, job.required_skills.length);
     const skillPercentage = (skillMatches / totalSkillsRequired);
@@ -246,12 +247,12 @@ function App() {
 
       setMatchedJobs(results.matched_jobs);
       setAppState(AppState.DASHBOARD);
-      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);
-    } catch (err) {
+      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);    } catch (err) {
       console.error(err);
       showToast("Failed to fetch real-time jobs. Please try again.", "error");
     } finally {
-      setIsMatching(false);    }
+      setIsMatching(false);
+    }
   };
 
   const getFilteredJobs = (jobs: MatchedJob[]): MatchedJob[] => {
@@ -371,13 +372,13 @@ function App() {
                 <Briefcase size={20} className="sm:w-6 sm:h-6" />
               </div>
               <span className="font-extrabold text-lg sm:text-2xl tracking-tight">HireLift</span>
-            </div>
-            <nav className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
+            </div>            <nav className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
               <button onClick={() => setShowAuthModal(true)} className="text-blue-700 hover:text-blue-900 px-2 sm:px-3 py-1 rounded transition">Log in</button>
               <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow text-xs sm:text-sm">Create</button>
             </nav>
           </div>
-        </header>{/* Animated Job/Professional Bubbles */}
+        </header>
+        {/* Animated Job/Professional Bubbles */}
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           {/* Resume bubble - top left */}
           <div className="absolute left-8 top-32 w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center animate-float-slow shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -441,10 +442,10 @@ function App() {
                     </div>
                   </button>
                 );
-              })}
-            </div>
+              })}            </div>
           </div>
-        </main>        {/* Auth Modal - Responsive */}
+        </main>
+        {/* Auth Modal - Responsive */}
         {showAuthModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl border border-slate-200">
