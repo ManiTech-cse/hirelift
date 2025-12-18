@@ -3,6 +3,7 @@ import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
+import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail } from './services/emailService';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
@@ -122,10 +123,14 @@ function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000); 
   };
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAppState(AppState.PROFILE);
+    
+    // Send welcome email
+    if (profile.email) {
+      await sendWelcomeEmail(profile);
+    }
   };
 
   const handleGenerateCoverLetter = async () => {
@@ -353,15 +358,26 @@ function App() {
     }, 1000);
 
     // Open career page in new window for user visibility
-    window.open(careerPageUrl, '_blank');
-
-    // Mark as applied
+    window.open(careerPageUrl, '_blank');    // Mark as applied
     setAppliedJobs(prev => new Set(prev).add(jobId));
     setApplyingJobs(prev => {
       const next = new Set(prev);
       next.delete(jobId);
       return next;
     });
+    
+    // Send confirmation email
+    const emailSent = await sendApplicationConfirmationEmail(
+      profile,
+      job,
+      new Date().toLocaleString()
+    );
+
+    if (emailSent) {
+      showToast(`✅ Confirmation email sent to ${profile.email}`);
+    } else {
+      showToast(`Application submitted! (Email notification pending)`, 'success');
+    }
     
     // Clean up iframe
     setTimeout(() => {
@@ -393,8 +409,12 @@ Thank you for using HireLift!
 
     showToast(`✅ Application submitted to ${job.company}! Check your email for confirmation.`);
   };
+  const handleLogout = async () => {
+    // Send batch email if user applied to jobs
+    if (appliedJobs.size > 0 && matchedJobs.length > 0) {
+      await sendBatchApplicationEmail(profile, matchedJobs, appliedJobs.size);
+    }
 
-  const handleLogout = () => {
     setAppState(AppState.LOGIN);
     setMatchedJobs([]);
     setProfile(INITIAL_PROFILE);
