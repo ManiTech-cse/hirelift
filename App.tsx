@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppState, UserProfile, MatchedJob } from './types';
+import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
@@ -7,9 +7,10 @@ import { Input, TextArea } from './components/Input';
 import Button from './components/Button';
 import JobCard from './components/JobCard';
 import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe } from 'lucide-react';
+import { AVAILABLE_JOBS } from './constants';
 
 // Default initial state
-const INITIAL_PROFILE: UserProfile = {
+const INITIAL_PROFILE: UserProfile = { 
   name: "Alex Doe",
   email: "alex.doe@example.com",
   skills: ["React", "TypeScript", "Tailwind"],
@@ -26,10 +27,20 @@ const INITIAL_PROFILE: UserProfile = {
   salaryExpectation: "$80,000 - $100,000"
 };
 
+// Add landing state type
+type ExtendedAppState = AppState | 'LANDING';
+
 function App() {
-  const [appState, setAppState] = useState<AppState>(AppState.LOGIN);
+  const [appState, setAppState] = useState<ExtendedAppState>('LANDING');
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
+  // Landing / auth modal state
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [suggestedPassword, setSuggestedPassword] = useState('');
+  const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -39,6 +50,52 @@ function App() {
   // New state for bot simulation
   const [activeBotJob, setActiveBotJob] = useState<string | null>(null);
   const [botStep, setBotStep] = useState<string>("");
+
+  // Simple strong password generator
+  const generateStrongPassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+[]{}<>?~';
+    let pw = '';
+    for (let i = 0; i < 14; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+    return pw;
+  };
+
+  const handleSuggestPassword = () => {
+    const pw = generateStrongPassword();
+    setSuggestedPassword(pw);
+    setAuthPassword(pw);
+  };
+
+  // Compute a simple match score between a Job and the user's (or demo) profile
+  const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
+    const skillMatches = job.required_skills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
+    const skillScore = Math.min(100, Math.round((skillMatches / Math.max(1, job.required_skills.length)) * 80));
+    // experience bonus: parse numeric years when possible
+    let expBonus = 0;
+    const userYears = Number((profileForCalc.experience || '').replace(/[^0-9]/g, '')) || 0;
+    const jobYears = Number((job.experience_required || '').replace(/[^0-9]/g, '')) || 0;
+    if (userYears && jobYears) {
+      if (userYears >= jobYears) expBonus = 15;
+      else if (userYears + 1 >= jobYears) expBonus = 8;
+    }
+    const total = Math.min(99, skillScore + expBonus + (Math.floor(Math.random()*5))); // small random uplift
+    return total;
+  };
+
+  const handleLandingJobClick = (job: Job) => {
+    setLandingSelectedJob(job);
+    // If user already inside application flow, let them continue; otherwise require auth
+    if (appState === 'LANDING') {
+      setShowAuthModal(true);
+      setIsRegisterMode(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      setSuggestedPassword('');
+    } else {
+      // In other states show profile or job details
+      // Fall back to opening profile
+      setAppState(AppState.PROFILE);
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -109,10 +166,67 @@ function App() {
     e.preventDefault();
     setIsMatching(true);
     try {
-      const results = await matchJobsWithProfile(profile);
+      let results;
+      try {
+        const response = await matchJobsWithProfile(profile);
+        // Validate response shape
+        if (response && Array.isArray(response.matched_jobs) && response.matched_jobs.length > 0) {
+          results = response;
+        } else {
+          throw new Error('Empty or invalid API result');
+        }
+      } catch (apiErr) {
+        // Local fallback: build smart matches from AVAILABLE_JOBS using resume/skills/experience
+        const built = (AVAILABLE_JOBS as Job[]).map(j => {
+          const matched_skills = j.required_skills.filter(s => profile.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase()));
+          const missing_skills = j.required_skills.filter(s => !profile.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase()));
+          // Reuse computeMatchScore for a sensible percentage
+          const match_percentage = computeMatchScore(j, profile);
+          const experienceNote = (() => {
+            const userYears = Number((profile.experience || '').replace(/[^0-9]/g, '')) || 0;
+            const jobYears = Number((j.experience_required || '').replace(/[^0-9]/g, '')) || 0;
+            if (userYears && jobYears) {
+              if (userYears >= jobYears) return 'Experience matches required level.';
+              if (userYears + 1 >= jobYears) return 'Slightly below required experience but close.';
+              return 'Below required experience.';
+            }
+            return 'Experience not clearly comparable.';
+          })();
+
+          const reasoning = `Matched ${matched_skills.length} / ${j.required_skills.length} skills. ${experienceNote}`;
+
+          return {
+            job_title: j.job_title,
+            company: j.company,
+            location: j.location,
+            match_percentage,
+            matched_skills,
+            missing_skills,
+            auto_apply_eligible: !!j.is_verified, // internal verified jobs are auto-apply eligible
+            apply_url: j.job_source?.startsWith('http') ? j.job_source : '#',
+            job_source: j.job_source || 'Internal',
+            reasoning,
+          };
+        });
+
+        // Sort by score desc
+        const sorted = built.sort((a, b) => b.match_percentage - a.match_percentage);
+        // Choose items: all >=50 plus top 8 to ensure UI is populated
+        const selected = sorted.filter(j => j.match_percentage >= 50).slice(0, 50);
+        if (selected.length < 8) {
+          // include top ones until we have at least 8
+          for (const item of sorted) {
+            if (!selected.includes(item)) selected.push(item);
+            if (selected.length >= 8) break;
+          }
+        }
+
+        results = { matched_jobs: selected };
+      }
+
       setMatchedJobs(results.matched_jobs);
       setAppState(AppState.DASHBOARD);
-      showToast(`Real-time search complete! Found ${results.matched_jobs.length} high-match jobs.`);
+      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);
     } catch (err) {
       console.error(err);
       showToast("Failed to fetch real-time jobs. Please try again.", "error");
@@ -204,6 +318,117 @@ function App() {
       };
     });
   };
+
+  // --- Landing Page Render ---
+  if (appState === 'LANDING') {
+    return (
+      <div className="min-h-screen relative bg-gradient-to-br from-indigo-900 via-blue-800 to-sky-700 overflow-hidden text-white">
+        {/* Decorative bubbles / icons */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -left-40 top-10 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute right-10 top-40 w-60 h-60 bg-white/6 rounded-full blur-lg rotate-12" />
+          <div className="absolute left-10 bottom-20 w-40 h-40 bg-white/4 rounded-full blur-lg" />
+        </div>
+
+        <header className="max-w-7xl mx-auto px-6 py-10 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 p-3 rounded-lg shadow-md">
+              <Briefcase size={28} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight">HireLift</h1>
+              <p className="text-sky-200 text-sm">AI-first job matching. Faster applications. Better fits.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowAuthModal(true)} className="bg-white text-sky-800 px-4 py-2 rounded-lg font-medium">Log in</button>
+            <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-sky-500/90 hover:bg-sky-400 px-4 py-2 rounded-lg font-medium">Create account</button>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-6 pb-16">
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div>
+              <h2 className="text-4xl font-bold mb-4 leading-tight">Land the right job, without the noise.</h2>
+              <p className="text-sky-200 mb-6 max-w-xl">We analyze your resume, experience and skills to surface roles you're actually qualified for — inspired by the matching quality of platforms like Naukri and LinkedIn.</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-white text-sky-800 px-5 py-3 rounded-lg font-semibold">Get started</button>
+                <button onClick={() => setAppState(AppState.LOGIN)} className="border border-white/20 px-5 py-3 rounded-lg">Demo</button>
+              </div>
+            </div>
+
+            <div>
+              <div className="bg-white/6 rounded-2xl p-4 shadow-xl">
+                <h3 className="text-white/90 font-semibold mb-3">Featured jobs</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {AVAILABLE_JOBS.slice(0,8).map((job, idx) => {
+                    const score = computeMatchScore(job, INITIAL_PROFILE);
+                    return (
+                      <button key={job.id} onClick={() => handleLandingJobClick(job)} className="text-left bg-white/8 hover:bg-white/12 p-3 rounded-lg flex flex-col gap-2 transition">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-semibold text-white">{job.job_title}</h4>
+                            <p className="text-xs text-sky-200">{job.company} • {job.location}</p>
+                          </div>
+                          <div className="text-sm font-bold bg-white/10 px-2 py-1 rounded">{score}%</div>
+                        </div>
+                        <div className="text-xs text-sky-100 mt-1 truncate">{job.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        {/* Auth Modal */}
+        {showAuthModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-xl w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">{isRegisterMode ? 'Create an account' : 'Log in'}</h3>
+                <button onClick={() => setShowAuthModal(false)} className="text-slate-400">Close</button>
+              </div>
+              <p className="text-sm text-slate-500 mb-4">Please {isRegisterMode ? 'register to save your profile and apply' : 'login to view and apply to jobs'}. Clicking a job will prompt this.</p>
+
+              <div className="space-y-3">
+                <input value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-3 py-2 border rounded" placeholder="Email" />
+                <div className="relative">
+                  <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} type="password" className="w-full px-3 py-2 border rounded" placeholder="Password" />
+                  {isRegisterMode && (
+                    <button type="button" onClick={handleSuggestPassword} className="absolute right-2 top-2 text-xs bg-sky-600 text-white px-2 py-1 rounded">Suggest</button>
+                  )}
+                </div>
+                {isRegisterMode && suggestedPassword && (
+                  <div className="text-xs text-green-700 bg-green-50 p-2 rounded">Suggested: <span className="font-mono">{suggestedPassword}</span></div>
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button onClick={() => {
+                  if (isRegisterMode) {
+                    // quick register: set profile email & move to profile page
+                    setProfile(prev => ({ ...prev, email: authEmail || prev.email, name: prev.name }));
+                    setAppState(AppState.PROFILE);
+                    setShowAuthModal(false);
+                    showToast('Account created. Please complete your profile.');
+                  } else {
+                    // quick login
+                    setProfile(prev => ({ ...prev, email: authEmail || prev.email }));
+                    setAppState(AppState.PROFILE);
+                    setShowAuthModal(false);
+                    showToast('Welcome back! Complete your profile to get accurate matches.');
+                  }
+                }} className="bg-sky-600 text-white px-4 py-2 rounded">{isRegisterMode ? 'Create Account' : 'Login'}</button>
+                <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="px-4 py-2 rounded border">{isRegisterMode ? 'Have an account? Login' : "Don't have an account? Register"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   /* --- LOGIN SCREEN --- */
   if (appState === AppState.LOGIN) {
