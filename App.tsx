@@ -322,70 +322,96 @@ function App() {
   // --- Landing Page Render ---
   if (appState === 'LANDING') {
     return (
-      <div className="min-h-screen relative bg-gradient-to-br from-indigo-900 via-blue-800 to-sky-700 overflow-hidden text-white">
-        {/* Decorative bubbles / icons */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -left-40 top-10 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute right-10 top-40 w-60 h-60 bg-white/6 rounded-full blur-lg rotate-12" />
-          <div className="absolute left-10 bottom-20 w-40 h-40 bg-white/4 rounded-full blur-lg" />
+      <div className="min-h-screen relative bg-white overflow-hidden text-slate-900">
+        {/* Sticky Nav Bar */}
+        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 text-white p-2 rounded-lg shadow-md">
+                <Briefcase size={24} />
+              </div>
+              <span className="font-extrabold text-2xl tracking-tight">HireLift</span>
+            </div>
+            <nav className="flex items-center gap-4 text-sm font-medium">
+              <button onClick={() => setShowAuthModal(true)} className="text-blue-700 hover:text-blue-900 px-3 py-1 rounded transition">Log in</button>
+              <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">Create account</button>
+            </nav>
+          </div>
+        </header>        {/* Animated Job/Professional Bubbles */}
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+          {/* Resume bubble - top left */}
+          <div className="absolute left-8 top-32 w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center animate-float-slow shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <FileText size={40} className="text-blue-400 opacity-70" />
+          </div>
+          
+          {/* Briefcase bubble - top right */}
+          <div className="absolute right-12 top-16 w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center animate-float-medium shadow-md hover:shadow-lg transition-shadow duration-300">
+            <Briefcase size={32} className="text-amber-400 opacity-70" />
+          </div>
+          
+          {/* User bubble - center bottom */}
+          <div className="absolute left-1/3 bottom-20 w-28 h-28 bg-green-100 rounded-full flex items-center justify-center animate-float-zigzag shadow-md hover:shadow-lg transition-shadow duration-300">
+            <User size={36} className="text-green-400 opacity-70" />
+          </div>
+          
+          {/* Sparkles bubble - right side */}
+          <div className="absolute right-1/4 bottom-40 w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center animate-float-fast shadow-md hover:shadow-lg transition-shadow duration-300">
+            <Sparkles size={28} className="text-purple-400 opacity-70" />
+          </div>
+          
+          {/* Additional Globe bubble - top center */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-10 w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center animate-bubble-pulse shadow-sm">
+            <Globe size={24} className="text-indigo-400 opacity-70" />
+          </div>
+          
+          {/* Additional Mail bubble - left side */}
+          <div className="absolute left-1/4 top-2/3 w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center animate-float-medium shadow-md hover:shadow-lg transition-shadow duration-300">
+            <Mail size={28} className="text-pink-400 opacity-70" />
+          </div>
         </div>
 
-        <header className="max-w-7xl mx-auto px-6 py-10 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="bg-white/10 p-3 rounded-lg shadow-md">
-              <Briefcase size={28} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">HireLift</h1>
-              <p className="text-sky-200 text-sm">AI-first job matching. Faster applications. Better fits.</p>
+        <main className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-16 flex flex-col items-center">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-center mb-4 leading-tight tracking-tight">Find Your Next <span className="text-blue-600">Dream Job</span> Instantly</h1>
+          <p className="text-lg text-slate-500 text-center mb-8 max-w-2xl">AI-powered job search that matches your resume, skills, and experience to the best roles. No more noise—just real opportunities. Inspired by Drive Tube and the best in job search design.</p>
+          <div className="w-full max-w-xl mb-12">
+            <div className="flex items-center bg-white border border-slate-200 rounded-full shadow-md px-4 py-2 gap-2">
+              <Search size={22} className="text-blue-500" />
+              <input className="flex-1 bg-transparent outline-none text-lg px-2" placeholder="Search jobs, companies, or skills... (Demo)" disabled />
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-full font-semibold shadow">Search</button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setShowAuthModal(true)} className="bg-white text-sky-800 px-4 py-2 rounded-lg font-medium">Log in</button>
-            <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-sky-500/90 hover:bg-sky-400 px-4 py-2 rounded-lg font-medium">Create account</button>
+
+          <div className="w-full max-w-5xl">
+            <h2 className="text-xl font-bold mb-4 text-slate-800">Featured Jobs</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {AVAILABLE_JOBS.slice(0,9).map((job, idx) => {
+                const score = computeMatchScore(job, INITIAL_PROFILE);
+                return (
+                  <button key={job.id} onClick={() => handleLandingJobClick(job)} className="group bg-white border border-slate-200 rounded-2xl shadow-lg hover:shadow-xl transition p-5 flex flex-col gap-2 relative overflow-hidden">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Briefcase size={18} className="text-blue-500" />
+                      <span className="font-semibold text-slate-900 text-base truncate">{job.job_title}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 mb-1 truncate">{job.company} • {job.location}</div>
+                    <div className="text-xs text-slate-400 mb-2 line-clamp-2">{job.description}</div>
+                    <div className="flex items-center gap-2 mt-auto">
+                      <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{score}% Match</span>
+                      {job.is_verified && <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full ml-1">Verified</span>}
+                    </div>
+                    <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ChevronRight size={20} className="text-blue-400" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </header>
-
-        <main className="max-w-7xl mx-auto px-6 pb-16">
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            <div>
-              <h2 className="text-4xl font-bold mb-4 leading-tight">Land the right job, without the noise.</h2>
-              <p className="text-sky-200 mb-6 max-w-xl">We analyze your resume, experience and skills to surface roles you're actually qualified for — inspired by the matching quality of platforms like Naukri and LinkedIn.</p>
-              <div className="flex gap-3">
-                <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-white text-sky-800 px-5 py-3 rounded-lg font-semibold">Get started</button>
-                <button onClick={() => setAppState(AppState.LOGIN)} className="border border-white/20 px-5 py-3 rounded-lg">Demo</button>
-              </div>
-            </div>
-
-            <div>
-              <div className="bg-white/6 rounded-2xl p-4 shadow-xl">
-                <h3 className="text-white/90 font-semibold mb-3">Featured jobs</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {AVAILABLE_JOBS.slice(0,8).map((job, idx) => {
-                    const score = computeMatchScore(job, INITIAL_PROFILE);
-                    return (
-                      <button key={job.id} onClick={() => handleLandingJobClick(job)} className="text-left bg-white/8 hover:bg-white/12 p-3 rounded-lg flex flex-col gap-2 transition">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-semibold text-white">{job.job_title}</h4>
-                            <p className="text-xs text-sky-200">{job.company} • {job.location}</p>
-                          </div>
-                          <div className="text-sm font-bold bg-white/10 px-2 py-1 rounded">{score}%</div>
-                        </div>
-                        <div className="text-xs text-sky-100 mt-1 truncate">{job.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </section>
         </main>
 
         {/* Auth Modal */}
         {showAuthModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-xl w-full max-w-md p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl border border-slate-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">{isRegisterMode ? 'Create an account' : 'Log in'}</h3>
                 <button onClick={() => setShowAuthModal(false)} className="text-slate-400">Close</button>
@@ -397,7 +423,7 @@ function App() {
                 <div className="relative">
                   <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} type="password" className="w-full px-3 py-2 border rounded" placeholder="Password" />
                   {isRegisterMode && (
-                    <button type="button" onClick={handleSuggestPassword} className="absolute right-2 top-2 text-xs bg-sky-600 text-white px-2 py-1 rounded">Suggest</button>
+                    <button type="button" onClick={handleSuggestPassword} className="absolute right-2 top-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">Suggest</button>
                   )}
                 </div>
                 {isRegisterMode && suggestedPassword && (
@@ -408,19 +434,17 @@ function App() {
               <div className="mt-4 flex gap-2">
                 <button onClick={() => {
                   if (isRegisterMode) {
-                    // quick register: set profile email & move to profile page
                     setProfile(prev => ({ ...prev, email: authEmail || prev.email, name: prev.name }));
                     setAppState(AppState.PROFILE);
                     setShowAuthModal(false);
                     showToast('Account created. Please complete your profile.');
                   } else {
-                    // quick login
                     setProfile(prev => ({ ...prev, email: authEmail || prev.email }));
                     setAppState(AppState.PROFILE);
                     setShowAuthModal(false);
                     showToast('Welcome back! Complete your profile to get accurate matches.');
                   }
-                }} className="bg-sky-600 text-white px-4 py-2 rounded">{isRegisterMode ? 'Create Account' : 'Login'}</button>
+                }} className="bg-blue-600 text-white px-4 py-2 rounded">{isRegisterMode ? 'Create Account' : 'Login'}</button>
                 <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="px-4 py-2 rounded border">{isRegisterMode ? 'Have an account? Login' : "Don't have an account? Register"}</button>
               </div>
             </div>
