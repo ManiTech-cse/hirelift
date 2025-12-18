@@ -71,20 +71,34 @@ function App() {
     setAuthPassword(pw);
   };
 
-  // Compute a simple match score between a Job and the user's (or demo) profile
-  const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
+  // Compute a simple match score between a Job and the user's (or demo) profile  const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
     const skillMatches = job.required_skills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
-    const skillScore = Math.min(100, Math.round((skillMatches / Math.max(1, job.required_skills.length)) * 80));
-    // experience bonus: parse numeric years when possible
+    const totalSkillsRequired = Math.max(1, job.required_skills.length);
+    const skillPercentage = (skillMatches / totalSkillsRequired);
+    
+    // Base skill score: 40% base + up to 50% for actual matches
+    const skillScore = 40 + Math.round(skillPercentage * 50);
+    
+    // Experience bonus: up to 20%
     let expBonus = 0;
     const userYears = Number((profileForCalc.experience || '').replace(/[^0-9]/g, '')) || 0;
     const jobYears = Number((job.experience_required || '').replace(/[^0-9]/g, '')) || 0;
     if (userYears && jobYears) {
-      if (userYears >= jobYears) expBonus = 15;
-      else if (userYears + 1 >= jobYears) expBonus = 8;
+      if (userYears >= jobYears) expBonus = 20;
+      else if (userYears + 1 >= jobYears) expBonus = 15;
+      else if (userYears >= jobYears - 1) expBonus = 10;
+    } else if (userYears > 0) {
+      expBonus = 10; // Give bonus if user has some experience even if job years unclear
     }
-    const total = Math.min(99, skillScore + expBonus + (Math.floor(Math.random()*5))); // small random uplift
-    return total;
+    
+    // Random diversity boost: up to 10%
+    const randomBoost = Math.floor(Math.random() * 11);
+    
+    // Total: base 40 + skills up to 50 + exp up to 20 + random up to 10 = 40-120
+    const total = Math.min(99, skillScore + expBonus + randomBoost);
+    
+    // Ensure minimum 50% for any profile with jobs in database
+    return Math.max(50, total);
   };
 
   const handleLandingJobClick = (job: Job) => {
