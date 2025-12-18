@@ -1,13 +1,6 @@
 # 📜 HireLift Git Commit History
 
-## 🎯 Project Status: ALL CHANGES COMMITTED & PUSHED ✅
-
-**Repository**: https://github.com/ManiTech-cse/hirelift  
-**Latest Commit**: `bf65feb` - Main branch  
-**Status**: ✅ Synced with GitHub  
-**Last Updated**: December 18, 2025
-
----
+> **Note**: You can add your git commits manually here as needed.
 
 ## 📋 Recent Commits (Latest First)
 
