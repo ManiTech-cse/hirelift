@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import About from './pages/About';
+import ResumeBuild from './pages/ResumeBuild';
+import LinkedInOptimization from './pages/LinkedInOptimization';
+import PersonalInteraction from './pages/PersonalInteraction';
 import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
@@ -32,10 +36,11 @@ const INITIAL_PROFILE: UserProfile = {
 };
 
 // Add landing state type
-type ExtendedAppState = AppState | 'LANDING';
+type ExtendedAppState = AppState | 'LANDING' | 'ABOUT' | 'RESUME' | 'LINKEDIN' | 'INTERACTION';
 
 function App() {
   const [appState, setAppState] = useState<ExtendedAppState>('LANDING');
+  const [currentPage, setCurrentPage] = useState<string>('home');
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
   // Landing / auth modal state
@@ -837,219 +842,248 @@ function App() {
         </div>
       </div>
     );
-  }
-  /* --- DASHBOARD --- */
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="bg-blue-600 text-white p-1 sm:p-1.5 rounded-lg">
-              <Briefcase size={18} className="sm:w-5 sm:h-5" />
-            </div>
-            <span className="font-bold text-lg sm:text-xl tracking-tight text-slate-900">HireLift</span>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <span className="text-xs sm:text-sm font-medium text-slate-600 hidden md:block">Welcome, {profile.name}</span>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 transition-colors p-1">
-              <LogOut size={18} className="sm:w-5 sm:h-5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-          {/* Sidebar */}
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-              <h2 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Your Profile</h2>
-              <div className="space-y-3 sm:space-y-4 text-sm">
-                <div>
-                  <p className="text-xs text-slate-500 uppercase font-semibold">Role</p>
-                  <p className="text-sm font-medium">{profile.preferredRoles[0]}</p>
+  }  /* --- DASHBOARD --- */  return (
+    <div>
+      {currentPage === 'home' ? (
+        <div className="min-h-screen bg-slate-50 flex flex-col">            <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="bg-blue-600 text-white p-1 sm:p-1.5 rounded-lg">
+                    <Briefcase size={18} className="sm:w-5 sm:h-5" />
+                  </div>
+                  <span className="font-bold text-lg sm:text-xl tracking-tight text-slate-900">HireLift</span>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500 uppercase font-semibold">Experience</p>
-                  <p className="text-sm font-medium">{profile.experience}</p>
+                <nav className="flex items-center gap-1 sm:gap-2">
+                  <button onClick={() => setCurrentPage('about')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">About</button>
+                  <button onClick={() => setCurrentPage('resume')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Resume</button>
+                  <button onClick={() => setCurrentPage('linkedin')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">LinkedIn</button>
+                  <button onClick={() => setCurrentPage('interaction')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Interview</button>
+                </nav>
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <span className="text-xs sm:text-sm font-medium text-slate-600 hidden md:block">Welcome, {profile.name}</span>
+                  <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-lg hover:bg-slate-100">
+                    <LogOut size={18} className="sm:w-5 sm:h-5" />
+                  </button>
                 </div>
-                <div>
-                   <p className="text-xs text-slate-500 uppercase font-semibold">Location / Mode</p>
-                   <p className="text-sm font-medium truncate" title={profile.jobLocation.join(', ')}>
-                     {profile.jobLocation.length > 0 ? profile.jobLocation[0] : (profile.primaryWorkMode || 'Any')}
-                     {profile.jobLocation.length > 1 && ` +${profile.jobLocation.length - 1}`}
-                   </p>
-                   <p className="text-xs text-slate-400 mt-1">
-                     {profile.workModes.join(', ')}
-                     {profile.primaryWorkMode && <span className="text-blue-500"> ({profile.primaryWorkMode} Pref)</span>}
-                   </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setAppState(AppState.PROFILE)} 
-                  className="w-full text-xs sm:text-sm mt-2"
-                >
-                  Edit Profile
-                </Button>
               </div>
-            </div>
+            </header>
 
-            {/* n8n Automation Card */}
-            <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl shadow-lg border border-indigo-700 p-4 sm:p-6 text-white">
-              <div className="flex items-center gap-2 mb-2">
-                <Workflow size={16} className="text-pink-400" />
-                <h3 className="font-bold text-xs sm:text-sm">Automate with n8n</h3>
-              </div>
-              <p className="text-xs text-indigo-200 mb-4 leading-relaxed">
-                Download a workflow to automate applications on your own server.
-              </p>
-              <Button 
-                onClick={handleDownloadN8n}
-                className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0"
-              >
-                Download Workflow
-              </Button>
-            </div>
-
-            {/* Workday Filler Card */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1 bg-blue-100 text-blue-600 rounded-lg">
-                  <FileCode size={16} />
-                </div>
-                <h3 className="font-bold text-slate-900 text-xs sm:text-sm">Workday Filler</h3>
-              </div>
-              <p className="text-xs text-slate-500 mb-4">
-                Get a script to auto-fill Workday applications in console.
-              </p>
-              <Button 
-                variant="outline"
-                onClick={handleDownloadWorkdayScript}
-                className="w-full text-xs flex items-center gap-2 justify-center"
-              >
-                <Download size={12} /> Get Script
-              </Button>
-            </div>
-
-            <Button 
-              onClick={() => setAppState(AppState.APPLICATION_FORM)} 
-              className="w-full justify-between group shadow-sm text-xs sm:text-sm"
-              variant="outline"
-            >
-              <span className="flex items-center gap-2">
-                <FileText size={14} /> Edit Application
-              </span>
-              <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </div>
-
-          <div className="lg:col-span-9">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Live Job Matches</h2>
-              <div className="text-xs sm:text-sm text-slate-500 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 whitespace-nowrap">
-                 <Search size={12} className="sm:w-4 sm:h-4" /> {getFilteredJobs(matchedJobs).length} matches
-              </div>
-            </div>
-
-            {/* Job Filters */}
-            <div className="mb-6">
-              <JobFilterPanel 
-                filters={jobFilters}
-                onFilterChange={setJobFilters}
-                resultCount={getFilteredJobs(matchedJobs).length}
-              />
-            </div>
-
-            {/* Active Bot Overlay */}
-            {activeBotJob && (
-               <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                 <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full border border-slate-200 text-center animate-in zoom-in duration-300">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
-                       <Bot size={24} className="text-blue-600 relative z-10 sm:w-8 sm:h-8" />
-                       <div className="absolute inset-0 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin"></div>
+            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+              
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+                {/* Sidebar */}
+                <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                    <h2 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Your Profile</h2>
+                    <div className="space-y-3 sm:space-y-4 text-sm">
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase font-semibold">Role</p>
+                        <p className="text-sm font-medium">{profile.preferredRoles[0]}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase font-semibold">Experience</p>
+                        <p className="text-sm font-medium">{profile.experience}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase font-semibold">Location / Mode</p>
+                        <p className="text-sm font-medium truncate" title={profile.jobLocation.join(', ')}>
+                          {profile.jobLocation.length > 0 ? profile.jobLocation[0] : (profile.primaryWorkMode || 'Any')}
+                          {profile.jobLocation.length > 1 && ` +${profile.jobLocation.length - 1}`}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {profile.workModes.join(', ')}
+                          {profile.primaryWorkMode && <span className="text-blue-500"> ({profile.primaryWorkMode} Pref)</span>}
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setAppState(AppState.PROFILE)} 
+                        className="w-full text-xs sm:text-sm mt-2"
+                      >
+                        Edit Profile
+                      </Button>
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">AI Auto-Pilot Running</h3>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-4">Please wait while we apply for you.</p>
-                    
-                    <div className="bg-slate-50 rounded-lg p-2 sm:p-3 text-xs sm:text-sm font-mono text-blue-700 border border-blue-100 flex items-center gap-2 justify-center">
-                      <Loader2 size={12} className="animate-spin sm:w-4 sm:h-4" />
-                      <span className="truncate">{botStep}</span>
+                  </div>
+
+                  {/* n8n Automation Card */}
+                  <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl shadow-lg border border-indigo-700 p-4 sm:p-6 text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Workflow size={16} className="text-pink-400" />
+                      <h3 className="font-bold text-xs sm:text-sm">Automate with n8n</h3>
                     </div>
-                 </div>
-               </div>
-            )}            <div className="space-y-4">
-              {matchedJobs.length > 0 ? (
-                getFilteredJobs(matchedJobs).length > 0 ? (
-                  getFilteredJobs(matchedJobs).map((job, index) => {
-                    const jobId = getJobId(job);
-                    return (
-                      <JobCard 
-                        key={index} 
-                        job={job} 
-                        onAutoApply={handleAutoApply}
-                        isApplying={applyingJobs.has(jobId)}
-                        isApplied={appliedJobs.has(jobId)}
-                      />
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
-                    <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
-                      <Search size={24} className="sm:w-8 sm:h-8" />
-                    </div>
-                    <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found with current filters</h3>
-                    <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>                    <Button 
-                      variant="outline" 
-                      onClick={() => setJobFilters({
-                        matchPercentage: 0,
-                        jobType: [],
-                        visaSponsorship: false,
-                        remote: false,
-                      })}
-                      className="mt-6 text-xs sm:text-sm"
+                    <p className="text-xs text-indigo-200 mb-4 leading-relaxed">
+                      Download a workflow to automate applications on your own server.
+                    </p>
+                    <Button 
+                      onClick={handleDownloadN8n}
+                      className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0"
                     >
-                      Reset Filters
+                      Download Workflow
                     </Button>
                   </div>
-                )
-              ) : (
-                <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
-                  <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
-                    <Search size={24} className="sm:w-8 sm:h-8" />
+
+                  {/* Workday Filler Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1 bg-blue-100 text-blue-600 rounded-lg">
+                        <FileCode size={16} />
+                      </div>
+                      <h3 className="font-bold text-slate-900 text-xs sm:text-sm">Workday Filler</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Get a script to auto-fill Workday applications in console.
+                    </p>
+                    <Button 
+                      variant="outline"
+                      onClick={handleDownloadWorkdayScript}
+                      className="w-full text-xs flex items-center gap-2 justify-center"
+                    >
+                      <Download size={12} /> Get Script
+                    </Button>
                   </div>
-                  <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found above 75%</h3>
-                  <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try updating your profile or broadening your location preferences.</p>
+
                   <Button 
-                    variant="outline" 
-                    onClick={() => setAppState(AppState.PROFILE)} 
-                    className="mt-6 text-xs sm:text-sm"
+                    onClick={() => setAppState(AppState.APPLICATION_FORM)} 
+                    className="w-full justify-between group shadow-sm text-xs sm:text-sm"
+                    variant="outline"
                   >
-                    Update Profile
+                    <span className="flex items-center gap-2">
+                      <FileText size={14} /> Edit Application
+                    </span>
+                    <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-2xl text-white transform transition-all duration-300 translate-y-0 z-50 flex items-center gap-2 text-xs sm:text-sm max-w-xs sm:max-w-sm ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-          <span className="font-medium">{toast.message}</span>
-        </div>
-      )}
+                <div className="lg:col-span-9">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Live Job Matches</h2>
+                    <div className="text-xs sm:text-sm text-slate-500 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 whitespace-nowrap">
+                      <Search size={12} className="sm:w-4 sm:h-4" /> {getFilteredJobs(matchedJobs).length} matches
+                    </div>
+                  </div>
 
-      {/* AutoApplyProgressModal */}
-      <AutoApplyProgressModal
-        steps={progressSteps}
-        currentStep={progressStepIdx}
-        isOpen={progressOpen}
-        onClose={() => setProgressOpen(false)}
-        error={progressError}
-      />
+                  {/* Job Filters */}
+                  <div className="mb-6">
+                    <JobFilterPanel 
+                      filters={jobFilters}
+                      onFilterChange={setJobFilters}
+                      resultCount={getFilteredJobs(matchedJobs).length}
+                    />
+                  </div>
+
+                  {/* Active Bot Overlay */}
+                  {activeBotJob && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                      <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full border border-slate-200 text-center animate-in zoom-in duration-300">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+                            <Bot size={24} className="text-blue-600 relative z-10 sm:w-8 sm:h-8" />
+                            <div className="absolute inset-0 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin"></div>
+                          </div>
+                          <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">AI Auto-Pilot Running</h3>
+                          <p className="text-xs sm:text-sm text-slate-500 mb-4">Please wait while we apply for you.</p>
+                          
+                          <div className="bg-slate-50 rounded-lg p-2 sm:p-3 text-xs sm:text-sm font-mono text-blue-700 border border-blue-100 flex items-center gap-2 justify-center">
+                            <Loader2 size={12} className="animate-spin sm:w-4 sm:h-4" />
+                            <span className="truncate">{botStep}</span>
+                          </div>
+                      </div>
+                    </div>
+                  )}            <div className="space-y-4">
+                    {matchedJobs.length > 0 ? (
+                      getFilteredJobs(matchedJobs).length > 0 ? (
+                        getFilteredJobs(matchedJobs).map((job, index) => {
+                          const jobId = getJobId(job);
+                          return (
+                            <JobCard 
+                              key={index} 
+                              job={job} 
+                              onAutoApply={handleAutoApply}
+                              isApplying={applyingJobs.has(jobId)}
+                              isApplied={appliedJobs.has(jobId)}
+                            />
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
+                          <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+                            <Search size={24} className="sm:w-8 sm:h-8" />
+                          </div>
+                          <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found with current filters</h3>
+                          <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>                    <Button 
+                            variant="outline" 
+                            onClick={() => setJobFilters({
+                              matchPercentage: 0,
+                              jobType: [],
+                              visaSponsorship: false,
+                              remote: false,
+                            })}
+                            className="mt-6 text-xs sm:text-sm"
+                          >
+                            Reset Filters
+                          </Button>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
+                        <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+                          <Search size={24} className="sm:w-8 sm:h-8" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found above 75%</h3>
+                        <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try updating your profile or broadening your location preferences.</p>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setAppState(AppState.PROFILE)} 
+                          className="mt-6 text-xs sm:text-sm"
+                        >
+                          Update Profile
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </main>
+
+            {/* Toast Notification */}
+            {toast && (
+              <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-2xl text-white transform transition-all duration-300 translate-y-0 z-50 flex items-center gap-2 text-xs sm:text-sm max-w-xs sm:max-w-sm ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+                {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                <span className="font-medium">{toast.message}</span>
+              </div>
+            )}
+
+            {/* AutoApplyProgressModal */}
+            <AutoApplyProgressModal
+              steps={progressSteps}
+              currentStep={progressStepIdx}
+              isOpen={progressOpen}
+              onClose={() => setProgressOpen(false)}
+              error={progressError}            />
+          </div>      ) : currentPage === 'about' ? (
+        <About 
+          userName={profile.name}
+          onNavigate={setCurrentPage}
+          onLogout={handleLogout}
+        />
+      ) : currentPage === 'resume' ? (
+        <ResumeBuild 
+          userName={profile.name}
+          onNavigate={setCurrentPage}
+          onLogout={handleLogout}
+        />
+      ) : currentPage === 'linkedin' ? (
+        <LinkedInOptimization 
+          userName={profile.name}
+          onNavigate={setCurrentPage}
+          onLogout={handleLogout}
+        />
+      ) : currentPage === 'interaction' ? (
+        <PersonalInteraction 
+          userName={profile.name}
+          onNavigate={setCurrentPage}
+          onLogout={handleLogout}
+        />
+      ) : null}
     </div>
   );
 }
