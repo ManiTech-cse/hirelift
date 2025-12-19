@@ -256,7 +256,7 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
             </div>
           </div>
           {/* Error message for network issues (e.g., ERR_NETWORK_IO_SUSPENDED) */}
-          {isApplying && (
+          {isApplying && window?.navigator?.onLine !== false && (
             <div className="w-full mb-2">
               <AutoApplyNetworkErrorAlert />
             </div>
