@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import NavBar from './components/NavBar';
 import About from './pages/About';
 import ResumeBuild from './pages/ResumeBuild';
 import LinkedInOptimization from './pages/LinkedInOptimization';
 import PersonalInteraction from './pages/PersonalInteraction';
+import PageHeader from './components/PageHeader';
 import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
@@ -844,6 +846,7 @@ function App() {
     );
   }  /* --- DASHBOARD --- */  return (
     <div>
+      <NavBar currentPage={currentPage} onNavigate={setCurrentPage} />
       {currentPage === 'home' ? (
         <div className="min-h-screen bg-slate-50 flex flex-col">            <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-4">
