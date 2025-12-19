@@ -2,12 +2,32 @@ import { GoogleGenAI } from "@google/genai";
 import { UserProfile, MatchingResponse, CompanyDetails } from "../types";
 import { AVAILABLE_JOBS } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: "AIzaSyC3YH8R2bkMZSGKxRBvZydzMakJ2RZEryA" });
+// API Key - REPLACE THIS WITH YOUR VALID KEY
+const GEMINI_API_KEY = "YOUR_VALID_GEMINI_API_KEY_HERE";
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 export const matchJobsWithProfile = async (
   profile: UserProfile
 ): Promise<MatchingResponse> => {
   try {
+    // Check if API key is set
+    if (GEMINI_API_KEY === "YOUR_VALID_GEMINI_API_KEY_HERE") {
+      console.error('❌ Gemini API Key not configured. Please set your valid API key in geminiService.ts');
+      return {
+        matched_jobs: AVAILABLE_JOBS.slice(0, 5).map(job => ({
+          job_title: job.job_title,
+          company: job.company,
+          location: job.location,
+          match_percentage: Math.floor(Math.random() * 40 + 60), // Random 60-100%
+          matched_skills: profile.skills.slice(0, 3),
+          missing_skills: [],
+          auto_apply_eligible: true,
+          apply_url: '',
+          job_source: job.job_source,
+          reasoning: 'Demo jobs (API key not configured)'
+        }))
+      };
+    }
     // Construct a search-oriented prompt with STRICT scoring rules
     // We also inject our hardcoded MNC jobs into the context so Gemini considers them
     const mncJobsContext = JSON.stringify(AVAILABLE_JOBS.map(j => ({
@@ -169,6 +189,15 @@ ${profile.name}`;
 
 export const fetchCompanyDetails = async (companyName: string): Promise<CompanyDetails | null> => {
   try {
+    // Check if API key is set
+    if (GEMINI_API_KEY === "YOUR_VALID_GEMINI_API_KEY_HERE") {
+      console.warn('⚠️ Gemini API Key not configured. Returning demo company details.');
+      return {
+        industry: 'Technology',
+        size: '1,000+ employees',
+        description: 'A leading technology company providing innovative solutions.'
+      };
+    }
     const prompt = `
       I need information about the company "${companyName}".
       

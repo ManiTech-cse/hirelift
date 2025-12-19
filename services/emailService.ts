@@ -9,12 +9,8 @@ const EMAILJS_TEMPLATE_ID = '__ejs-test-mail-service__';
 const EMAILJS_PUBLIC_KEY = 'u8JU-tyBlwhXi_2Jo';
 
 // Initialize EmailJS on module load
-try {
-  emailjs.init(EMAILJS_PUBLIC_KEY);
-  console.log('✅ EmailJS initialized successfully');
-} catch (error) {
-  console.error('❌ Failed to initialize EmailJS:', error);
-}
+emailjs.init(EMAILJS_PUBLIC_KEY);
+console.log('✅ EmailJS initialized');
 
 /**
  * Send application confirmation email to user via EmailJS + fallback to localStorage
@@ -96,20 +92,26 @@ HireLift Team
           message: emailContent,
           job_title: job.job_title,
           company: job.company,
-          match_score: String(job.match_percentage)
+          match_score: String(job.match_percentage),
+          from_name: 'HireLift Team',
+          from_email: 'noreply@hirelift.app'
         }
       );
       console.log('📤 EmailJS response:', response);
+      console.log('📤 Response status:', response.status);
       if (response.status === 200) {
         console.log('✅ Email sent successfully via EmailJS');
         emailSent = true;
       } else {
         console.warn('⚠️ EmailJS returned status:', response.status);
+        emailSent = false;
       }
-    } catch (emailJsError) {
+    } catch (emailJsError: any) {
       console.error('❌ EmailJS send error:', emailJsError);
-      if (emailJsError && typeof emailJsError === 'object') {
-        console.error('❌ Error details:', emailJsError);
+      console.error('❌ Error type:', emailJsError?.status || 'unknown');
+      console.error('❌ Error text:', emailJsError?.text || 'no details');
+      if (emailJsError?.status === 'failed') {
+        console.error('❌ EmailJS response:', emailJsError?.response || 'no response data');
       }
     }
 

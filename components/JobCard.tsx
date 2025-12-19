@@ -6,6 +6,22 @@ import { getCompanyInfo } from '../services/companyDatabase';
 import { CheckCircle, MapPin, Building2, Briefcase, Zap, AlertCircle, ExternalLink, Check, BrainCircuit, Info, Users, Factory, ChevronDown, ChevronUp, Globe } from 'lucide-react';
 import Button from './Button';
 
+// Network error alert for auto-apply
+const AutoApplyNetworkErrorAlert: React.FC = () => {
+  const [show, setShow] = React.useState(true);
+  // This would ideally be controlled by error state from the emailService, but for now, always show if isApplying is true
+  if (!show) return null;
+  return (
+    <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded px-2 py-1 flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+      <AlertCircle size={14} className="shrink-0" />
+      <span>
+        Network error detected. If you see <b>ERR_NETWORK_IO_SUSPENDED</b> or email delivery fails, please check your firewall, VPN, or browser privacy settings. See the <a href="./QUICK_START_EMAIL.md" className="underline hover:text-red-800" target="_blank" rel="noopener noreferrer">email troubleshooting guide</a>.
+      </span>
+      <button onClick={() => setShow(false)} className="ml-auto text-red-400 hover:text-red-600 px-1">&times;</button>
+    </div>
+  );
+};
+
 interface JobCardProps {
   job: MatchedJob;
   onAutoApply: (job: MatchedJob) => void;
@@ -239,7 +255,12 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
               {job.match_percentage}%
             </div>
           </div>
-          
+          {/* Error message for network issues (e.g., ERR_NETWORK_IO_SUSPENDED) */}
+          {isApplying && (
+            <div className="w-full mb-2">
+              <AutoApplyNetworkErrorAlert />
+            </div>
+          )}
           <Button 
             onClick={() => onAutoApply(job)}
             variant={isApplied ? 'outline' : 'primary'} 
