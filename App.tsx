@@ -3,12 +3,13 @@ import { AppState, UserProfile, MatchedJob, Job } from './types';
 import { matchJobsWithProfile, generateCoverLetter } from './services/geminiService';
 import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
-import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail, initializeEmailService } from './services/emailService';
+import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail } from './services/emailService';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
 import JobCard from './components/JobCard';
 import JobFilterPanel, { JobFilters } from './components/JobFilterPanel';
+import AutoApplyProgressModal from './components/AutoApplyProgressModal';
 import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe } from 'lucide-react';
 import { AVAILABLE_JOBS } from './constants';
 
@@ -46,7 +47,8 @@ function App() {
   const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);  const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);  
+  const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
   // New state for bot simulation
   const [activeBotJob, setActiveBotJob] = useState<string | null>(null);
@@ -58,16 +60,10 @@ function App() {
     visaSponsorship: false,
     remote: false,
   });
-
-  useEffect(() => {
-    initializeEmailService();
-  }, []);
-
-  // Initialize email service on component mount
-  useEffect(() => {
-    initializeEmailService();
-    console.log('HireLift App initialized with email service');
-  }, []);
+  const [progressSteps, setProgressSteps] = useState<string[]>([]);
+  const [progressStepIdx, setProgressStepIdx] = useState<number>(0);
+  const [progressOpen, setProgressOpen] = useState<boolean>(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
 
   // Simple strong password generator
   const generateStrongPassword = () => {
@@ -80,7 +76,8 @@ function App() {
   const handleSuggestPassword = () => {
     const pw = generateStrongPassword();
     setSuggestedPassword(pw);
-    setAuthPassword(pw);  };
+    setAuthPassword(pw);  
+  };
 
   // Compute a simple match score between a Job and the user's (or demo) profile
   const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
@@ -264,7 +261,8 @@ function App() {
 
       setMatchedJobs(results.matched_jobs);
       setAppState(AppState.DASHBOARD);
-      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);    } catch (err) {
+      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);    
+    } catch (err) {
       console.error(err);
       showToast("Failed to fetch real-time jobs. Please try again.", "error");
     } finally {
@@ -295,130 +293,97 @@ function App() {
     setApplyingJobs(prev => new Set(prev).add(jobId));
     setActiveBotJob(jobId);
 
-    // Prepare application data for auto-fill
-    const applicationData = {
-      name: profile.name,
-      email: profile.email,
-      phone: profile.availability || '9999999999',
-      resume: profile.resumeText,
-      coverLetter: profile.coverLetter,
-      skills: profile.skills,
-      experience: profile.experience,
-      linkedin: profile.linkedin,
-      portfolio: profile.portfolio
-    };
-
-    // Simulate bot steps with Workday auto-fill
+    // Define all progress steps
     const steps = [
-      `Preparing application for ${job.company}...`,
-      "Validating your profile data...",
-      "Generating customized cover letter...",
-      `Auto-filling Workday form at ${job.company}...`,
-      "Submitting your application...",
-      `Successfully applied to ${job.company}!`,
+      `Opening ${job.company} careers page...`,
+      'Validating your profile data...',
+      'Filling: First Name',
+      'Filling: Last Name',
+      'Filling: Email',
+      'Filling: Phone',
+      'Filling: LinkedIn',
+      'Filling: Portfolio',
+      'Filling: Cover Letter',
+      'Submitting application...',
+      'Sending confirmation email...'
     ];
+    setProgressSteps(steps);
+    setProgressStepIdx(0);
+    setProgressOpen(true);
+    setProgressError(null);
 
-    for (const step of steps) {
-      setBotStep(step);
-      await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 600)); 
+    // Step 1: Open careers page
+    setProgressStepIdx(0);
+    const careerPageUrl = job.apply_url || `https://www.google.com/search?q=${encodeURIComponent(job.company + ' careers')}`;
+    let iframe: HTMLIFrameElement | null = null;
+    try {
+      iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = careerPageUrl;
+      document.body.appendChild(iframe);
+      await new Promise(res => setTimeout(res, 1200));
+    } catch (e) {
+      setProgressError('Could not open careers page.');
+      setProgressOpen(false);
+      return;
     }
 
-    // Open career page in background and auto-fill
-    const careerPageUrl = job.apply_url || `https://www.google.com/search?q=${encodeURIComponent(job.company + ' careers')}`;
-    
-    // Create a hidden iframe to handle the application
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = careerPageUrl;
-    document.body.appendChild(iframe);
+    // Step 2: Validate profile
+    setProgressStepIdx(1);
+    await new Promise(res => setTimeout(res, 700));
 
-    // Auto-fill Workday form via injected script
-    setTimeout(() => {
-      try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (iframeDoc) {
-          // Fill in common Workday form fields
-          const fillFormField = (selector: string, value: string) => {
-            const element = iframeDoc.querySelector(selector);
-            if (element) {
-              (element as any).value = value;
-              (element as any).dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          };
+    // Step 3-8: Fill fields (simulate, as cross-origin blocks real automation)
+    const fieldSteps = [
+      { idx: 2, label: 'First Name', value: profile.name.split(' ')[0] },
+      { idx: 3, label: 'Last Name', value: profile.name.split(' ')[1] || '' },
+      { idx: 4, label: 'Email', value: profile.email },
+      { idx: 5, label: 'Phone', value: profile.availability || '9999999999' },
+      { idx: 6, label: 'LinkedIn', value: profile.linkedin || '' },
+      { idx: 7, label: 'Portfolio', value: profile.portfolio || '' },
+      { idx: 8, label: 'Cover Letter', value: profile.coverLetter }
+    ];
+    for (const field of fieldSteps) {
+      setProgressStepIdx(field.idx);
+      await new Promise(res => setTimeout(res, 600));
+    }
 
-          // Fill profile information
-          fillFormField('input[name="firstName"]', profile.name.split(' ')[0]);
-          fillFormField('input[name="lastName"]', profile.name.split(' ')[1] || '');
-          fillFormField('input[name="email"]', profile.email);
-          fillFormField('input[name="phone"]', applicationData.phone);
-          fillFormField('textarea[name="comments"]', profile.coverLetter);
-          fillFormField('input[name="linkedin"]', profile.linkedin || '');
-          fillFormField('input[name="portfolio"]', profile.portfolio || '');
+    // Step 9: Submit application (simulate)
+    setProgressStepIdx(9);
+    await new Promise(res => setTimeout(res, 1000));
 
-          // Auto-submit form after a delay
-          setTimeout(() => {
-            const submitBtn = iframeDoc.querySelector('button[type="submit"]');
-            if (submitBtn) {
-              (submitBtn as HTMLButtonElement).click();
-            }
-          }, 2000);
-        }
-      } catch (error) {
-        console.log('Cross-origin restriction: opening career page directly');
-        window.open(careerPageUrl, '_blank');
-      }
-    }, 1000);
+    // Step 10: Send confirmation email
+    setProgressStepIdx(10);
+    const emailSent = await sendApplicationConfirmationEmail(
+      profile,
+      job,
+      new Date().toLocaleString()
+    );
+    await new Promise(res => setTimeout(res, 800));
 
-    // Open career page in new window for user visibility
-    window.open(careerPageUrl, '_blank');    // Mark as applied
+    setProgressOpen(false);
+    setProgressStepIdx(0);
+
+    // Mark as applied
     setAppliedJobs(prev => new Set(prev).add(jobId));
     setApplyingJobs(prev => {
       const next = new Set(prev);
       next.delete(jobId);
       return next;
     });
-      // Send confirmation email
-    const emailSent = await sendApplicationConfirmationEmail(
-      profile,
-      job,
-      new Date().toLocaleString()
-    );
 
     if (emailSent) {
       showToast(`✅ Email sent to ${profile.email} - Check your inbox!`);
     } else {
       showToast(`✅ Application submitted! Email backed up locally`, 'success');
     }
-    
+
     // Clean up iframe
     setTimeout(() => {
-      document.body.removeChild(iframe);
+      if (iframe) document.body.removeChild(iframe);
     }, 5000);
 
     setActiveBotJob(null);
     setBotStep("");
-
-    // Send confirmation email to user
-    const emailContent = `
-Application Submitted Successfully!
-
-Job: ${job.job_title}
-Company: ${job.company}
-Location: ${job.location}
-Match Score: ${job.match_percentage}%
-
-Your application has been automatically submitted through Workday.
-We will notify you of any updates.
-
-Thank you for using HireLift!
-    `;
-
-    // Log email (in production, use backend API to send actual email)
-    console.log('📧 Email to:', profile.email);
-    console.log('📧 Subject: HireLift - Application Submitted to', job.company);
-    console.log('📧 Body:', emailContent);
-
-    showToast(`✅ Application submitted to ${job.company}! Check your email for confirmation.`);
   };
   const handleLogout = async () => {
     // Send batch email if user applied to jobs
@@ -1076,6 +1041,15 @@ Thank you for using HireLift!
           <span className="font-medium">{toast.message}</span>
         </div>
       )}
+
+      {/* AutoApplyProgressModal */}
+      <AutoApplyProgressModal
+        steps={progressSteps}
+        currentStep={progressStepIdx}
+        isOpen={progressOpen}
+        onClose={() => setProgressOpen(false)}
+        error={progressError}
+      />
     </div>
   );
 }

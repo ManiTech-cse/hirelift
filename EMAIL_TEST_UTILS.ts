@@ -13,24 +13,29 @@
 
 export const checkEmailStatus = () => {
   console.log('🔍 Checking Email Service Status...\n');
-  
-  // Check EmailJS
-  const emailjs = (window as any).emailjs;
-  console.log('✅ EmailJS Loaded:', !!emailjs);
-  
+
+  // Check EmailJS (npm import, not window)
+  try {
+    // @ts-ignore
+    const emailjs = require('@emailjs/browser');
+    console.log('✅ EmailJS npm package loaded:', !!emailjs);
+  } catch (e) {
+    console.log('❌ EmailJS npm package not found');
+  }
+
   // Check LocalStorage
   const emails = localStorage.getItem('hirelift_emails');
   const batches = localStorage.getItem('hirelift_batch_emails');
   const welcomes = localStorage.getItem('hirelift_welcome_emails');
-  
+
   console.log('✅ LocalStorage - Application Emails:', !!emails);
   console.log('✅ LocalStorage - Batch Emails:', !!batches);
   console.log('✅ LocalStorage - Welcome Emails:', !!welcomes);
-  
+
   // Check Notification Permission
   const notifPermission = (Notification as any)?.permission || 'unavailable';
   console.log('✅ Notification Permission:', notifPermission);
-  
+
   console.log('\n📊 Summary:');
   console.log(`Applications stored: ${emails ? JSON.parse(emails).length : 0}`);
   console.log(`Batches stored: ${batches ? JSON.parse(batches).length : 0}`);

@@ -1,41 +1,26 @@
 // Email service for sending application confirmations using EmailJS
+import emailjs from '@emailjs/browser';
 import { MatchedJob } from '../types';
 import { UserProfile } from '../types';
 
 // EmailJS Service ID and Template IDs (free tier - 200 emails/month)
-const EMAILJS_SERVICE_ID = 'service_hirelift';
-const EMAILJS_TEMPLATE_ID = 'template_application';
-const EMAILJS_PUBLIC_KEY = 'ePVV2JDPvvTIHw8jX';
+const EMAILJS_SERVICE_ID = 'service_9o12nss';
+const EMAILJS_TEMPLATE_ID = '__ejs-test-mail-service__';
+const EMAILJS_PUBLIC_KEY = 'u8JU-tyBlwhXi_2Jo';
 
-/**
- * Initialize EmailJS (call once on app load)
- */
-export const initializeEmailService = (): void => {
-  try {
-    // Initialize EmailJS in the browser
-    if (window && typeof window !== 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/index.min.js';
-      script.onload = () => {
-        // @ts-ignore
-        if (window.emailjs) {
-          // @ts-ignore
-          window.emailjs.init(EMAILJS_PUBLIC_KEY);
-          console.log('✅ EmailJS initialized');
-        }
-      };
-      script.onerror = () => {
-        console.warn('⚠️ EmailJS library failed to load, will use fallback');
-      };
-      document.head.appendChild(script);
-    }
-  } catch (error) {
-    console.warn('EmailJS initialization warning:', error);
-  }
-};
+// Initialize EmailJS on module load
+try {
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+  console.log('✅ EmailJS initialized successfully');
+} catch (error) {
+  console.error('❌ Failed to initialize EmailJS:', error);
+}
 
 /**
  * Send application confirmation email to user via EmailJS + fallback to localStorage
+ * Note: Workday does not provide a public API for sending application confirmation emails directly from their platform. 
+ * If you want to send emails through Workday, you must use their enterprise API or integration, which is not possible from a client-side app.
+ * The best you can do is send confirmation emails from your own app (as implemented here) or via a backend.
  */
 export const sendApplicationConfirmationEmail = async (
   profile: UserProfile,
@@ -98,34 +83,34 @@ HireLift Team
       matchScore: job.match_percentage,
       status: 'confirmed',
       emailContent: emailContent
-    };
-
-    // Try to send via EmailJS first
+    };    // Try to send via EmailJS npm package
     let emailSent = false;
     try {
-      // @ts-ignore
-      if (window.emailjs) {
-        const response = await (window.emailjs as any).send(
-          EMAILJS_SERVICE_ID,
-          EMAILJS_TEMPLATE_ID,
-          {
-            to_email: profile.email,
-            to_name: profile.name,
-            subject: emailRecord.subject,
-            message: emailContent,
-            job_title: job.job_title,
-            company: job.company,
-            match_score: job.match_percentage
-          }
-        );
-        
-        if (response.status === 200) {
-          console.log('✅ Email sent via EmailJS:', response);
-          emailSent = true;
+      const response = await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email: profile.email,
+          to_name: profile.name,
+          subject: emailRecord.subject,
+          message: emailContent,
+          job_title: job.job_title,
+          company: job.company,
+          match_score: String(job.match_percentage)
         }
+      );
+      console.log('📤 EmailJS response:', response);
+      if (response.status === 200) {
+        console.log('✅ Email sent successfully via EmailJS');
+        emailSent = true;
+      } else {
+        console.warn('⚠️ EmailJS returned status:', response.status);
       }
     } catch (emailJsError) {
-      console.warn('⚠️ EmailJS failed, using fallback:', emailJsError);
+      console.error('❌ EmailJS send error:', emailJsError);
+      if (emailJsError && typeof emailJsError === 'object') {
+        console.error('❌ Error details:', emailJsError);
+      }
     }
 
     // Always store in localStorage as backup
@@ -140,15 +125,15 @@ HireLift Team
     if (emailSent) {
       console.log('✅ Email sent via EmailJS + backed up to localStorage');
     } else {
-      console.log('✅ Email backed up to localStorage (EmailJS unavailable)');
+      console.log('✅ Email backed up to localStorage (EmailJS unavailable or failed)');
     }
 
-    return true;
+    return emailSent;
 
   } catch (error) {
     console.error('❌ Error sending email:', error);
-    // Still return true if we at least saved to localStorage
-    return true;
+    // Still return false if we failed to send
+    return false;
   }
 };
 
@@ -165,10 +150,7 @@ const sendDesktopNotification = (userName: string, jobTitle: string, company: st
             icon: '/favicon.ico',
             badge: '/favicon.ico',
             tag: 'hirelift-app-' + Date.now(),
-            requireInteraction: true,
-            actions: [
-              { action: 'close', title: 'Dismiss' }
-            ]
+            requireInteraction: true
           });
           console.log('✅ Desktop notification sent');
         } catch (notifError) {
@@ -244,26 +226,21 @@ HireLift Team
       })),
       status: 'batch_sent',
       emailContent: batchEmailContent
-    };
-
-    // Try EmailJS first
+    };    // Try EmailJS first
     try {
-      // @ts-ignore
-      if (window.emailjs) {
-        await (window.emailjs as any).send(
-          EMAILJS_SERVICE_ID,
-          EMAILJS_TEMPLATE_ID,
-          {
-            to_email: profile.email,
-            to_name: profile.name,
-            subject: `✅ Batch Application Summary - ${totalApplied} jobs applied!`,
-            message: batchEmailContent,
-            job_title: `${totalApplied} applications`,
-            company: 'HireLift Summary'
-          }
-        );
-        console.log('✅ Batch email sent via EmailJS');
-      }
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email: profile.email,
+          to_name: profile.name,
+          subject: `✅ Batch Application Summary - ${totalApplied} jobs applied!`,
+          message: batchEmailContent,
+          job_title: `${totalApplied} applications`,
+          company: 'HireLift Summary'
+        }
+      );
+      console.log('✅ Batch email sent via EmailJS');
     } catch (emailJsError) {
       console.warn('⚠️ EmailJS batch failed, using localStorage:', emailJsError);
     }
@@ -332,26 +309,21 @@ HireLift Team
       subject: 'Welcome to HireLift! 🚀',
       status: 'welcome_sent',
       emailContent: welcomeContent
-    };
-
-    // Try EmailJS first
+    };    // Try EmailJS first
     try {
-      // @ts-ignore
-      if (window.emailjs) {
-        await (window.emailjs as any).send(
-          EMAILJS_SERVICE_ID,
-          EMAILJS_TEMPLATE_ID,
-          {
-            to_email: profile.email,
-            to_name: profile.name,
-            subject: 'Welcome to HireLift! 🚀',
-            message: welcomeContent,
-            job_title: 'Welcome',
-            company: 'HireLift'
-          }
-        );
-        console.log('✅ Welcome email sent via EmailJS');
-      }
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email: profile.email,
+          to_name: profile.name,
+          subject: 'Welcome to HireLift! 🚀',
+          message: welcomeContent,
+          job_title: 'Welcome',
+          company: 'HireLift'
+        }
+      );
+      console.log('✅ Welcome email sent via EmailJS');
     } catch (emailJsError) {
       console.warn('⚠️ EmailJS welcome failed, using localStorage:', emailJsError);
     }

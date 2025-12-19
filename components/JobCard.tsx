@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { MatchedJob, CompanyDetails } from '../types';
 import { fetchCompanyDetails } from '../services/geminiService';
 import { getCachedCompanyDetails, setCachedCompanyDetails } from '../services/companyCache';
-import { CheckCircle, MapPin, Building2, Briefcase, Zap, AlertCircle, ExternalLink, Check, BrainCircuit, Info, Users, Factory, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCompanyInfo } from '../services/companyDatabase';
+import { CheckCircle, MapPin, Building2, Briefcase, Zap, AlertCircle, ExternalLink, Check, BrainCircuit, Info, Users, Factory, ChevronDown, ChevronUp, Globe } from 'lucide-react';
 import Button from './Button';
 
 interface JobCardProps {
@@ -63,7 +64,6 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
       }
     }
   };
-
   const handleSourceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const url = job.apply_url && job.apply_url.startsWith('http') 
@@ -71,6 +71,16 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
       : `https://www.google.com/search?q=${encodeURIComponent(`${job.job_title} ${job.company} careers ${job.job_source}`)}`;
     window.open(url, '_blank');
   };
+
+  const handleCareersPageClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const companyInfo = getCompanyInfo(job.company);
+    if (companyInfo?.careersUrl) {
+      window.open(companyInfo.careersUrl, '_blank');
+    }
+  };
+
+  const companyInfo = getCompanyInfo(job.company);
 
   return (
     <div className={`bg-white rounded-xl border p-6 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group ${isApplied ? 'border-green-200 bg-green-50/30' : 'border-slate-200'}`}>
@@ -85,15 +95,13 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
         <div className="absolute top-0 right-0 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1 shadow-sm z-10">
           <Check size={12} /> APPLIED
         </div>
-      )}
-
-      <div className="flex flex-col md:flex-row gap-6">
+      )}      <div className="flex flex-col md:flex-row gap-6">
         {/* Left: Job Info */}
         <div className="flex-1">
-          <div className="flex items-start justify-between mb-2">
-            <div>
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
               <h3 className="text-xl font-bold text-slate-900 leading-tight">{job.job_title}</h3>
-              <div className="flex items-center gap-2 mt-1 text-slate-600">
+              <div className="flex items-center gap-2 mt-2 text-slate-600 flex-wrap">
                 <Building2 size={16} />
                 <span className="font-medium">{job.company}</span>
                 <span className="text-blue-500 mx-1">•</span>
@@ -102,6 +110,29 @@ const JobCard: React.FC<JobCardProps> = ({ job, onAutoApply, isApplying = false,
                 </span>
               </div>
             </div>
+            
+            {/* Company Logo & Careers Link - Right side on desktop */}
+            {companyInfo && (
+              <div className="flex flex-col items-end gap-2 ml-4">
+                <div className="bg-white border border-slate-200 rounded-lg p-2 h-12 w-12 flex items-center justify-center hover:shadow-md transition-shadow">
+                  <img 
+                    src={companyInfo.logo} 
+                    alt={companyInfo.name}
+                    className="max-h-10 max-w-10 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23475569"%3E%3Crect width="24" height="24" fill="%23f1f5f9"/%3E%3Ctext x="12" y="14" font-size="10" text-anchor="middle" fill="%23475569" font-weight="bold"%3E{job.company.substring(0, 2).toUpperCase()}%3C/text%3E%3C/svg%3E';
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleCareersPageClick}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1 transition-colors"
+                  title={`Visit ${companyInfo.name} Careers Page`}
+                >
+                  <Globe size={12} /> Careers
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-y-2 gap-x-4 mt-3 text-sm text-slate-500">
