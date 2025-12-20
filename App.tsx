@@ -16,7 +16,7 @@ import Button from './components/Button';
 import JobCard from './components/JobCard';
 import JobFilterPanel, { JobFilters } from './components/JobFilterPanel';
 import AutoApplyProgressModal from './components/AutoApplyProgressModal';
-import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe } from 'lucide-react';
+import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe, Lock, Eye, EyeOff, UserPlus, LogIn } from 'lucide-react';
 import { AVAILABLE_JOBS } from './constants';
 
 // Default initial state
@@ -44,13 +44,15 @@ function App() {
   const [appState, setAppState] = useState<ExtendedAppState>('LANDING');
   const [currentPage, setCurrentPage] = useState<string>('home');
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
-  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
-  // Landing / auth modal state
+  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);  // Landing / auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [authName, setAuthName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
   const [suggestedPassword, setSuggestedPassword] = useState('');
+  const [authErrors, setAuthErrors] = useState<{name?: string, email?: string, password?: string, confirmPassword?: string}>({});
   const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
@@ -79,11 +81,67 @@ function App() {
     for (let i = 0; i < 14; i++) pw += chars[Math.floor(Math.random() * chars.length)];
     return pw;
   };
-
   const handleSuggestPassword = () => {
     const pw = generateStrongPassword();
     setSuggestedPassword(pw);
-    setAuthPassword(pw);  
+    setAuthPassword(pw);
+    setAuthConfirmPassword(pw);
+  };
+
+  // Validation function for auth
+  const validateAuth = (): boolean => {
+    const errors: {name?: string, email?: string, password?: string, confirmPassword?: string} = {};
+    
+    if (isRegisterMode) {
+      if (!authName || authName.trim().length < 2) {
+        errors.name = 'Name must be at least 2 characters';
+      }
+      if (!authEmail || !authEmail.includes('@')) {
+        errors.email = 'Please enter a valid email';
+      }
+      if (!authPassword || authPassword.length < 8) {
+        errors.password = 'Password must be at least 8 characters';
+      }
+      if (authPassword !== authConfirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+    } else {
+      if (!authEmail) {
+        errors.email = 'Email is required';
+      }
+      if (!authPassword) {
+        errors.password = 'Password is required';
+      }
+    }
+    
+    setAuthErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleAuthSubmit = () => {
+    if (!validateAuth()) {
+      return;
+    }
+    
+    if (isRegisterMode) {
+      setProfile(prev => ({ ...prev, email: authEmail, name: authName }));
+      setAppState(AppState.PROFILE);
+      setShowAuthModal(false);
+      showToast('Account created successfully! Complete your profile.');
+    } else {
+      setProfile(prev => ({ ...prev, email: authEmail }));
+      setAppState(AppState.PROFILE);
+      setShowAuthModal(false);
+      showToast('Welcome back!');
+    }
+    
+    // Reset form
+    setAuthName('');
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthConfirmPassword('');
+    setSuggestedPassword('');
+    setAuthErrors({});
   };
 
   // Compute a simple match score between a Job and the user's (or demo) profile
@@ -518,45 +576,218 @@ function App() {
                 );
               })}            </div>
           </div>
-        </main>
-        {/* Auth Modal - Responsive */}
+        </main>        {/* Auth Modal - Beautiful Design with Animated Bubbles */}
         {showAuthModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl border border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">{isRegisterMode ? 'Create an account' : 'Log in'}</h3>
-                <button onClick={() => setShowAuthModal(false)} className="text-slate-400 text-xl">✕</button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl w-full max-w-md shadow-2xl border border-white/20 relative overflow-hidden">
+              {/* Animated background blobs */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-400/30 to-purple-400/30 rounded-full blur-3xl animate-blob"></div>
+                <div className="absolute top-20 -left-20 w-40 h-40 bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+                <div className="absolute -bottom-20 left-1/2 w-40 h-40 bg-gradient-to-br from-cyan-400/30 to-blue-400/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
               </div>
-              <p className="text-sm text-slate-500 mb-4">Please {isRegisterMode ? 'register to save your profile and apply' : 'login to view and apply to jobs'}. Clicking a job will prompt this.</p>
 
-              <div className="space-y-3">
-                <input value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" placeholder="Email" />
-                <div className="relative">
-                  <input value={authPassword} onChange={e => setAuthPassword(e.target.value)} type="password" className="w-full px-3 py-2 border rounded text-sm" placeholder="Password" />
+              <div className="relative z-10 p-8">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-3 bg-gradient-to-br ${isRegisterMode ? 'from-purple-600 to-pink-600' : 'from-blue-600 to-cyan-600'} rounded-full`}>
+                      {isRegisterMode ? <UserPlus className="w-6 h-6 text-white" /> : <LogIn className="w-6 h-6 text-white" />}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        {isRegisterMode ? 'Create Account' : 'Welcome Back'}
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        {isRegisterMode ? 'Join HireLift today' : 'Login to continue'}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setShowAuthModal(false);
+                      setAuthErrors({});
+                      setAuthName('');
+                      setAuthEmail('');
+                      setAuthPassword('');
+                      setAuthConfirmPassword('');
+                      setSuggestedPassword('');
+                    }} 
+                    className="text-slate-400 hover:text-slate-600 transition-colors p-2 hover:bg-white/50 rounded-lg"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Form */}
+                <div className="space-y-4">
+                  {/* Name field - only for registration */}
                   {isRegisterMode && (
-                    <button type="button" onClick={handleSuggestPassword} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-blue-600 text-white px-2 py-1 rounded">Suggest</button>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                          <User className="w-5 h-5" />
+                        </div>
+                        <input 
+                          value={authName} 
+                          onChange={e => {
+                            setAuthName(e.target.value);
+                            setAuthErrors(prev => ({...prev, name: undefined}));
+                          }} 
+                          className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.name ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
+                          placeholder="John Doe" 
+                        />
+                      </div>
+                      {authErrors.name && (
+                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {authErrors.name}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Email field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <input 
+                        value={authEmail} 
+                        onChange={e => {
+                          setAuthEmail(e.target.value);
+                          setAuthErrors(prev => ({...prev, email: undefined}));
+                        }} 
+                        type="email"
+                        className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.email ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
+                        placeholder="john@example.com" 
+                      />
+                    </div>
+                    {authErrors.email && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {authErrors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Password field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                        <Lock className="w-5 h-5" />
+                      </div>
+                      <input 
+                        value={authPassword} 
+                        onChange={e => {
+                          setAuthPassword(e.target.value);
+                          setAuthErrors(prev => ({...prev, password: undefined}));
+                        }} 
+                        type="password" 
+                        className={`w-full pl-11 pr-24 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.password ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
+                        placeholder="Enter password" 
+                      />
+                      {isRegisterMode && (
+                        <button 
+                          type="button" 
+                          onClick={handleSuggestPassword} 
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-3 py-1.5 rounded-lg hover:shadow-lg transition-all font-semibold"
+                        >
+                          Generate
+                        </button>
+                      )}
+                    </div>
+                    {authErrors.password && (
+                      <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {authErrors.password}
+                      </p>
+                    )}
+                    {isRegisterMode && suggestedPassword && (
+                      <div className="mt-2 text-xs bg-green-50 border border-green-200 text-green-700 p-2 rounded-lg flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="font-medium">Strong password generated!</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Confirm Password field - only for registration */}
+                  {isRegisterMode && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Confirm Password</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Lock className="w-5 h-5" />
+                        </div>
+                        <input 
+                          value={authConfirmPassword} 
+                          onChange={e => {
+                            setAuthConfirmPassword(e.target.value);
+                            setAuthErrors(prev => ({...prev, confirmPassword: undefined}));
+                          }} 
+                          type="password" 
+                          className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.confirmPassword ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
+                          placeholder="Confirm your password" 
+                        />
+                        {authPassword && authConfirmPassword && authPassword === authConfirmPassword && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                            <CheckCircle className="w-5 h-5" />
+                          </div>
+                        )}
+                      </div>
+                      {authErrors.confirmPassword && (
+                        <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {authErrors.confirmPassword}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-                {isRegisterMode && suggestedPassword && (
-                  <div className="text-xs text-green-700 bg-green-50 p-2 rounded">Suggested: <span className="font-mono text-xs">{suggestedPassword}</span></div>
-                )}
-              </div>
 
-              <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                <button onClick={() => {
-                  if (isRegisterMode) {
-                    setProfile(prev => ({ ...prev, email: authEmail || prev.email, name: prev.name }));
-                    setAppState(AppState.PROFILE);
-                    setShowAuthModal(false);
-                    showToast('Account created. Complete your profile.');
-                  } else {
-                    setProfile(prev => ({ ...prev, email: authEmail || prev.email }));
-                    setAppState(AppState.PROFILE);
-                    setShowAuthModal(false);
-                    showToast('Welcome back! Complete your profile.');
-                  }
-                }} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium">{isRegisterMode ? 'Create Account' : 'Login'}</button>
-                <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="px-4 py-2 rounded border text-sm font-medium">{isRegisterMode ? 'Have account?' : "Don't have account?"}</button>
+                {/* Action Buttons */}
+                <div className="mt-6 space-y-3">
+                  <button 
+                    onClick={handleAuthSubmit}
+                    className={`w-full bg-gradient-to-r ${isRegisterMode ? 'from-purple-600 to-pink-600' : 'from-blue-600 to-cyan-600'} text-white px-6 py-3 rounded-xl font-semibold text-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2`}
+                  >
+                    {isRegisterMode ? (
+                      <>
+                        <UserPlus className="w-5 h-5" />
+                        Create Account
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-5 h-5" />
+                        Login
+                      </>
+                    )}
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      setIsRegisterMode(!isRegisterMode);
+                      setAuthErrors({});
+                      setSuggestedPassword('');
+                    }} 
+                    className="w-full bg-white/80 backdrop-blur-sm text-slate-700 px-6 py-3 rounded-xl font-medium text-sm hover:bg-white hover:shadow-lg transition-all duration-300 border-2 border-white/50"
+                  >
+                    {isRegisterMode ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+                  </button>
+                </div>
+
+                {/* Additional Info */}
+                {isRegisterMode && (
+                  <p className="mt-4 text-xs text-center text-slate-500">
+                    By creating an account, you agree to our Terms of Service and Privacy Policy
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -595,22 +826,36 @@ function App() {
       </div>
     );
   }
-
   /* --- PROFILE SETUP (Step 1) --- */
   if (appState === AppState.PROFILE) {
-    return (      <div className="min-h-screen bg-slate-50 py-8 sm:py-12 px-4 sm:px-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-blue-600 mb-2">
-              <span className="bg-blue-100 px-2 py-0.5 rounded">Step 1 of 2</span>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden py-8 sm:py-12 px-4 sm:px-6">
+        {/* Animated background blobs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-full blur-3xl animate-blob"></div>
+          <div className="absolute top-60 -left-40 w-80 h-80 bg-gradient-to-br from-cyan-400/20 to-blue-400/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+          <div className="absolute -bottom-20 right-1/3 w-80 h-80 bg-gradient-to-br from-teal-400/20 to-emerald-400/20 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+        </div>
+
+        <div className="max-w-3xl mx-auto relative z-10">
+          <div className="mb-6 sm:mb-8 text-center">
+            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full mb-4">
+              <User className="w-8 h-8 text-white" />
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-emerald-600 mb-3">
+              <span className="bg-emerald-100 px-3 py-1 rounded-full">Step 1 of 2</span>
               <span>User Details</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Build Your Profile</h1>
-            <p className="text-slate-500 mt-1 text-sm sm:text-base">Tell us about your skills to find real-time matches.</p>
+            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-3">
+              Build Your Profile
+            </h1>
+            <p className="text-slate-700 mt-1 text-base sm:text-lg max-w-2xl mx-auto">
+              Tell us about your skills and preferences to find perfect job matches
+            </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-            <div className="p-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-1.5"></div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-white/50 overflow-hidden">
+            <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
             <form onSubmit={handleProfileSubmit} className="p-6 sm:p-8 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <Input 
@@ -730,31 +975,44 @@ function App() {
       </div>
     );
   }
-
   /* --- APPLICATION FORM (Step 2) --- */
   if (appState === AppState.APPLICATION_FORM) {
     return (
-      <div className="min-h-screen bg-slate-50 py-12 px-4">
-        <div className="max-w-3xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 relative overflow-hidden py-12 px-4">
+        {/* Animated background blobs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -left-40 w-80 h-80 bg-gradient-to-br from-violet-400/20 to-purple-400/20 rounded-full blur-3xl animate-blob"></div>
+          <div className="absolute top-60 -right-40 w-80 h-80 bg-gradient-to-br from-fuchsia-400/20 to-pink-400/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+          <div className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-purple-400/20 to-violet-400/20 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+        </div>
+
+        <div className="max-w-3xl mx-auto relative z-10">
           <Button 
             variant="ghost" 
             onClick={handleBackFromApplication} 
-            className="mb-6 pl-0 hover:bg-transparent hover:text-blue-600"
+            className="mb-6 pl-0 hover:bg-transparent hover:text-violet-600 text-slate-700"
           >
             <ArrowLeft size={20} className="mr-2" /> Back
           </Button>
 
-          <div className="mb-8">
-            <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 mb-2">
-              <span className="bg-blue-100 px-2 py-0.5 rounded">Step 2 of 2</span>
+          <div className="mb-8 text-center">
+            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-full mb-4">
+              <Mail className="w-8 h-8 text-white" />
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm font-semibold text-violet-600 mb-3">
+              <span className="bg-violet-100 px-3 py-1 rounded-full">Step 2 of 2</span>
               <span>Application Form</span>
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">Master Application</h1>
-            <p className="text-slate-500 mt-1">Configure your auto-apply email template.</p>
+            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent mb-3">
+              Application Template
+            </h1>
+            <p className="text-slate-700 mt-1 text-base max-w-2xl mx-auto">
+              Configure your auto-apply settings and cover letter template
+            </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-            <div className="p-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-1.5"></div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-white/50 overflow-hidden">
+            <div className="h-2 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500"></div>
             <form onSubmit={handleApplicationFormSubmit} className="p-8 space-y-6">
               
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
@@ -844,11 +1102,19 @@ function App() {
         </div>
       </div>
     );
-  }  /* --- DASHBOARD --- */  return (
-    <div>
+  }  /* --- DASHBOARD --- */
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative">
+      {/* Animated background blobs for dashboard */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 -right-40 w-96 h-96 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 rounded-full blur-3xl animate-blob"></div>
+        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-gradient-to-br from-indigo-400/10 to-purple-400/10 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-20 right-1/3 w-96 h-96 bg-gradient-to-br from-cyan-400/10 to-blue-400/10 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+      </div>
+
       <NavBar currentPage={currentPage} onNavigate={setCurrentPage} />
       {currentPage === 'home' ? (
-        <div className="min-h-screen bg-slate-50 flex flex-col">            <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="min-h-screen flex flex-col relative z-10"><header className="bg-white border-b border-slate-200 sticky top-0 z-30">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="bg-blue-600 text-white p-1 sm:p-1.5 rounded-lg">
@@ -873,23 +1139,27 @@ function App() {
 
             <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
               
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-                {/* Sidebar */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">                {/* Sidebar */}
                 <div className="lg:col-span-3 space-y-4 sm:space-y-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-                    <h2 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Your Profile</h2>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                        <User size={18} className="text-white" />
+                      </div>
+                      <h2 className="font-bold text-slate-900 text-sm sm:text-base">Your Profile</h2>
+                    </div>
                     <div className="space-y-3 sm:space-y-4 text-sm">
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase font-semibold">Role</p>
-                        <p className="text-sm font-medium">{profile.preferredRoles[0]}</p>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Role</p>
+                        <p className="text-sm font-medium text-slate-800">{profile.preferredRoles[0]}</p>
                       </div>
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase font-semibold">Experience</p>
-                        <p className="text-sm font-medium">{profile.experience}</p>
+                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Experience</p>
+                        <p className="text-sm font-medium text-slate-800">{profile.experience}</p>
                       </div>
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase font-semibold">Location / Mode</p>
-                        <p className="text-sm font-medium truncate" title={profile.jobLocation.join(', ')}>
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Location / Mode</p>
+                        <p className="text-sm font-medium text-slate-800 truncate" title={profile.jobLocation.join(', ')}>
                           {profile.jobLocation.length > 0 ? profile.jobLocation[0] : (profile.primaryWorkMode || 'Any')}
                           {profile.jobLocation.length > 1 && ` +${profile.jobLocation.length - 1}`}
                         </p>
@@ -901,45 +1171,46 @@ function App() {
                       <Button 
                         variant="outline" 
                         onClick={() => setAppState(AppState.PROFILE)} 
-                        className="w-full text-xs sm:text-sm mt-2"
+                        className="w-full text-xs sm:text-sm mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                       >
                         Edit Profile
                       </Button>
                     </div>
-                  </div>
-
-                  {/* n8n Automation Card */}
-                  <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-xl shadow-lg border border-indigo-700 p-4 sm:p-6 text-white">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Workflow size={16} className="text-pink-400" />
-                      <h3 className="font-bold text-xs sm:text-sm">Automate with n8n</h3>
+                  </div>                  {/* n8n Automation Card */}
+                  <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-xl shadow-xl border-2 border-white/20 p-4 sm:p-6 text-white hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                        <Workflow size={18} className="text-white" />
+                      </div>
+                      <h3 className="font-bold text-sm sm:text-base">Automate with n8n</h3>
                     </div>
-                    <p className="text-xs text-indigo-200 mb-4 leading-relaxed">
+                    <p className="text-xs text-white/90 mb-4 leading-relaxed">
                       Download a workflow to automate applications on your own server.
                     </p>
                     <Button 
                       onClick={handleDownloadN8n}
-                      className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0"
+                      className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0 hover:shadow-lg font-semibold"
                     >
+                      <Download size={14} className="mr-2" />
                       Download Workflow
                     </Button>
                   </div>
 
                   {/* Workday Filler Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1 bg-blue-100 text-blue-600 rounded-lg">
-                        <FileCode size={16} />
+                  <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg">
+                        <FileCode size={18} className="text-white" />
                       </div>
-                      <h3 className="font-bold text-slate-900 text-xs sm:text-sm">Workday Filler</h3>
+                      <h3 className="font-bold text-slate-900 text-sm sm:text-base">Workday Filler</h3>
                     </div>
-                    <p className="text-xs text-slate-500 mb-4">
+                    <p className="text-xs text-slate-600 mb-4">
                       Get a script to auto-fill Workday applications in console.
                     </p>
                     <Button 
                       variant="outline"
                       onClick={handleDownloadWorkdayScript}
-                      className="w-full text-xs flex items-center gap-2 justify-center"
+                      className="w-full text-xs flex items-center gap-2 justify-center bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-0 hover:shadow-lg"
                     >
                       <Download size={12} /> Get Script
                     </Button>
@@ -947,7 +1218,7 @@ function App() {
 
                   <Button 
                     onClick={() => setAppState(AppState.APPLICATION_FORM)} 
-                    className="w-full justify-between group shadow-sm text-xs sm:text-sm"
+                    className="w-full justify-between group shadow-lg text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-purple-600 border-0 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                     variant="outline"
                   >
                     <span className="flex items-center gap-2">
@@ -955,13 +1226,17 @@ function App() {
                     </span>
                     <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
                   </Button>
-                </div>
-
-                <div className="lg:col-span-9">
+                </div>                <div className="lg:col-span-9">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Live Job Matches</h2>
-                    <div className="text-xs sm:text-sm text-slate-500 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 whitespace-nowrap">
-                      <Search size={12} className="sm:w-4 sm:h-4" /> {getFilteredJobs(matchedJobs).length} matches
+                    <div>
+                      <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Live Job Matches
+                      </h2>
+                      <p className="text-sm text-slate-600 mt-1">Real-time opportunities tailored for you</p>
+                    </div>
+                    <div className="text-xs sm:text-sm text-slate-700 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border-2 border-white/50 shadow-lg flex items-center gap-2 whitespace-nowrap font-semibold">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      {getFilteredJobs(matchedJobs).length} matches found
                     </div>
                   </div>
 
@@ -1085,8 +1360,25 @@ function App() {
           userName={profile.name}
           onNavigate={setCurrentPage}
           onLogout={handleLogout}
-        />
-      ) : null}
+        />      ) : null}
+
+      {/* Global Styles for Animations */}
+      <style>{`
+        @keyframes blob {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+      `}</style>
     </div>
   );
 }
