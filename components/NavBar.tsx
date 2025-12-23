@@ -6,7 +6,7 @@ interface NavBarProps {
   onNavigate?: (page: string) => void;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ currentPage = 'home', onNavigate = () => {} }) => {
+const NavBar = ({ currentPage = 'home', onNavigate }: NavBarProps) => {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'about', label: 'About', icon: Briefcase },
@@ -26,12 +26,11 @@ const NavBar: React.FC<NavBarProps> = ({ currentPage = 'home', onNavigate = () =
       
       <div className="flex items-center gap-1 md:gap-2">
         {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentPage === item.id;
+          const Icon = item.icon;          const isActive = currentPage === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => onNavigate?.(item.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${isActive ? 'bg-blue-100 text-blue-700' : 'text-slate-700 hover:text-blue-600 hover:bg-slate-50'}`}
               title={item.label}
             >

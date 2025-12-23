@@ -26,6 +26,20 @@ export interface Job {
   job_source: string;
   description: string;
   is_verified: boolean;
+  // Extended fields for AI Agent jobs
+  logo?: string;
+  work_mode?: string;
+  salary_range?: string;
+  requirements?: string[];
+  responsibilities?: string[];
+  source?: 'LinkedIn' | 'Naukri' | 'Career Page';
+  careerPageUrl?: string;
+  applyUrl?: string;
+  postedDate?: string;
+  job_type?: string;
+  experience_level?: string;
+  skills?: string[];
+  visa_sponsorship?: boolean;
 }
 
 export interface MatchedJob {

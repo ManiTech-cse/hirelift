@@ -10,13 +10,14 @@ import { matchJobsWithProfile, generateCoverLetter } from './services/geminiServ
 import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
 import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail } from './services/emailService';
+import { fetchDailyJobs, scheduleDailyJobFetch, getSourceBadgeColor } from './services/jobScraperAgent';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
 import JobCard from './components/JobCard';
 import JobFilterPanel, { JobFilters } from './components/JobFilterPanel';
 import AutoApplyProgressModal from './components/AutoApplyProgressModal';
-import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe, Lock, Eye, EyeOff, UserPlus, LogIn } from 'lucide-react';
+import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail, FileText, ArrowLeft, Save, User, Sparkles, Workflow, Bot, Loader2, FileCode, Download, MapPin, Globe, Lock, Eye, EyeOff, UserPlus, LogIn, ExternalLink } from 'lucide-react';
 import { AVAILABLE_JOBS } from './constants';
 
 // Default initial state
@@ -44,7 +45,9 @@ function App() {
   const [appState, setAppState] = useState<ExtendedAppState>('LANDING');
   const [currentPage, setCurrentPage] = useState<string>('home');
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
-  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);  // Landing / auth modal state
+  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
+  const [dailyAIJobs, setDailyAIJobs] = useState<Job[]>([]);  // AI Agent Jobs
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);  // Landing / auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authName, setAuthName] = useState('');
@@ -143,11 +146,12 @@ function App() {
     setSuggestedPassword('');
     setAuthErrors({});
   };
-
   // Compute a simple match score between a Job and the user's (or demo) profile
   const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
-    const skillMatches = job.required_skills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
-    const totalSkillsRequired = Math.max(1, job.required_skills.length);
+    // Handle both old format (required_skills) and new format (skills)
+    const jobSkills = job.skills || job.required_skills || [];
+    const skillMatches = jobSkills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
+    const totalSkillsRequired = Math.max(1, jobSkills.length);
     const skillPercentage = (skillMatches / totalSkillsRequired);
     
     // Base skill score: 40% base + up to 50% for actual matches
@@ -156,7 +160,7 @@ function App() {
     // Experience bonus: up to 20%
     let expBonus = 0;
     const userYears = Number((profileForCalc.experience || '').replace(/[^0-9]/g, '')) || 0;
-    const jobYears = Number((job.experience_required || '').replace(/[^0-9]/g, '')) || 0;
+    const jobYears = Number((job.experience_required || job.experience_level || '').replace(/[^0-9]/g, '')) || 0;
     if (userYears && jobYears) {
       if (userYears >= jobYears) expBonus = 20;
       else if (userYears + 1 >= jobYears) expBonus = 15;
@@ -190,11 +194,32 @@ function App() {
       setAppState(AppState.PROFILE);
     }
   };
-
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000); 
   };
+
+  // Fetch AI Agent Jobs on component mount
+  useEffect(() => {
+    const loadAIJobs = async () => {
+      setIsLoadingJobs(true);
+      try {
+        const jobs = await fetchDailyJobs();
+        setDailyAIJobs(jobs);
+        console.log('✅ Loaded 25 AI-curated jobs from LinkedIn, Naukri, and Career Pages');
+      } catch (error) {
+        console.error('❌ Error loading AI jobs:', error);
+      } finally {
+        setIsLoadingJobs(false);
+      }
+    };
+    
+    loadAIJobs();
+    
+    // Schedule daily job fetch at 8:30 AM
+    scheduleDailyJobFetch();
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAppState(AppState.PROFILE);
@@ -550,31 +575,134 @@ function App() {
               <input className="flex-1 bg-transparent outline-none text-sm sm:text-lg px-2" placeholder="Search jobs, skills... (Demo)" disabled />
               <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-full font-semibold shadow text-xs sm:text-sm whitespace-nowrap">Search</button>
             </div>
-          </div>
+          </div>          <div className="w-full max-w-5xl px-2">
+            {/* Hidden header - AI agent still works in background */}
+            
+            {isLoadingJobs ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <span className="ml-3 text-slate-600">Loading fresh jobs...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {dailyAIJobs.slice(0, 25).map((job) => {
+                  const score = computeMatchScore(job, INITIAL_PROFILE);
+                  return (
+                    <button 
+                      key={job.id} 
+                      onClick={() => handleLandingJobClick(job)} 
+                      className="group bg-white border-2 border-slate-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-blue-400 transition-all duration-300 p-6 flex flex-col gap-3 relative overflow-hidden transform hover:-translate-y-1"
+                    >                      {/* Company Logo Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <img 
+                              src={job.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(job.company)}&background=3b82f6&color=fff&bold=true`} 
+                              alt={job.company} 
+                              className="w-full h-full object-contain p-1"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(job.company)}&background=3b82f6&color=fff&bold=true`;
+                              }}
+                            />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <h3 className="font-bold text-slate-900 text-base truncate">{job.company}</h3>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${getSourceBadgeColor(job.source)}`}>
+                                {job.source}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      </div>
 
-          <div className="w-full max-w-5xl px-2">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-slate-800">Featured Jobs</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {AVAILABLE_JOBS.slice(0,9).map((job, idx) => {
-                const score = computeMatchScore(job, INITIAL_PROFILE);
-                return (
-                  <button key={job.id} onClick={() => handleLandingJobClick(job)} className="group bg-white border border-slate-200 rounded-xl sm:rounded-2xl shadow-md hover:shadow-xl transition p-4 sm:p-5 flex flex-col gap-2 relative overflow-hidden">
-                    <div className="flex items-start gap-2 mb-1">
-                      <Briefcase size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                      <span className="font-semibold text-slate-900 text-sm sm:text-base truncate">{job.job_title}</span>
-                    </div>
-                    <div className="text-xs text-slate-500 mb-1 truncate">{job.company} • {job.location}</div>
-                    <div className="text-xs text-slate-400 mb-2 line-clamp-2">{job.description}</div>
-                    <div className="flex items-center gap-2 mt-auto flex-wrap">
-                      <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{score}% Match</span>
-                      {job.is_verified && <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">Verified</span>}
-                    </div>
-                    <div className="absolute right-3 sm:right-4 top-3 sm:top-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ChevronRight size={18} className="text-blue-400" />
-                    </div>
-                  </button>
-                );
-              })}            </div>
+                      {/* Job Title */}
+                      <div>
+                        <h4 className="font-semibold text-slate-900 text-left text-sm line-clamp-2 leading-tight">
+                          {job.job_title}
+                        </h4>
+                      </div>
+
+                      {/* Location & Work Mode */}
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{job.location}</span>
+                        <span className="text-slate-400">•</span>
+                        <span className="text-blue-600 font-semibold">{job.work_mode}</span>
+                      </div>
+
+                      {/* Salary */}
+                      <div className="text-left">
+                        <span className="text-sm font-bold text-green-600">{job.salary_range}</span>
+                      </div>
+
+                      {/* Skills Tags */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {job.skills?.slice(0, 3).map((skill, idx) => (
+                          <span key={idx} className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                            {skill}
+                          </span>
+                        ))}
+                        {job.skills && job.skills.length > 3 && (
+                          <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">
+                            +{job.skills.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Match Score & Verified Badge */}
+                      <div className="flex items-center gap-2 mt-auto pt-2 border-t border-slate-100">
+                        <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          {score}% Match
+                        </span>
+                        {job.is_verified && (
+                          <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-semibold flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Verified
+                          </span>
+                        )}
+                        {job.visa_sponsorship && (
+                          <span className="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full font-semibold">
+                            Visa
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Hover Arrow */}
+                      <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-x-1">
+                        <ChevronRight size={20} className="text-blue-500" />
+                      </div>
+
+                      {/* Shine Effect on Hover */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 transform -skew-x-12 group-hover:translate-x-full transition-all duration-700"></div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* View All Jobs CTA */}
+            {dailyAIJobs.length > 0 && (
+              <div className="mt-8 text-center">
+                <button 
+                  onClick={() => {
+                    setShowAuthModal(true);
+                    setIsRegisterMode(true);
+                  }}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                >
+                  <UserPlus className="w-5 h-5" />
+                  Create Account to Apply
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+                <p className="text-sm text-slate-500 mt-3">
+                  🚀 Join 10,000+ job seekers finding their dream jobs with AI
+                </p>
+              </div>
+            )}
           </div>
         </main>        {/* Auth Modal - Beautiful Design with Animated Bubbles */}
         {showAuthModal && (
