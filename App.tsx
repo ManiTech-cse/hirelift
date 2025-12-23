@@ -596,15 +596,26 @@ function App() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-slate-200 shadow-sm">
-                            <img 
-                              src={job.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(job.company)}&background=3b82f6&color=fff&bold=true`} 
-                              alt={job.company} 
-                              className="w-full h-full object-contain p-1"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(job.company)}&background=3b82f6&color=fff&bold=true`;
-                              }}
-                            />
+                            {job.logo ? (
+                              <img 
+                                src={job.logo} 
+                                alt={`${job.company} logo`} 
+                                className="w-full h-full object-contain p-1.5"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.onerror = null; // Prevent infinite loop
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-white font-bold text-sm">${job.company.slice(0, 2).toUpperCase()}</div>`;
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-white font-bold text-sm">
+                                {job.company.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
                           </div>
                           <div className="text-left flex-1 min-w-0">
                             <h3 className="font-bold text-slate-900 text-base truncate">{job.company}</h3>
