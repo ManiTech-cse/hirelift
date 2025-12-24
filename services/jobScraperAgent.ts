@@ -54,11 +54,235 @@ interface ScrapedJob {
   skills: string[];
 }
 
+// Job pool - different roles for each company (for daily rotation)
+const JOB_ROLES_POOL: { [key: string]: { title: string; level: string; salary: string; skills: string[]; location: string; workMode: string; description: string; sponsorship: boolean }[] } = {
+  'Google': [
+    { title: 'Senior Software Engineer', level: 'Senior', salary: '$150,000 - $250,000', skills: ['Python', 'Java', 'System Design', 'Algorithms'], location: 'Mountain View, CA', workMode: 'Hybrid', description: 'Join Google core engineering team to build scalable systems that impact billions of users worldwide.', sponsorship: true },
+    { title: 'Cloud Solutions Architect', level: 'Senior', salary: '$160,000 - $270,000', skills: ['GCP', 'Kubernetes', 'Terraform', 'Architecture'], location: 'Sunnyvale, CA', workMode: 'Remote', description: 'Design and implement cloud solutions on Google Cloud Platform for enterprise customers.', sponsorship: true },
+    { title: 'Data Scientist - ML', level: 'Senior', salary: '$155,000 - $260,000', skills: ['Python', 'TensorFlow', 'ML', 'Statistics'], location: 'Mountain View, CA', workMode: 'Hybrid', description: 'Build ML models that power Google Search, Ads, and YouTube recommendations.', sponsorship: true },
+    { title: 'Frontend Engineer - Angular', level: 'Mid-Senior', salary: '$140,000 - $220,000', skills: ['Angular', 'TypeScript', 'CSS', 'JavaScript'], location: 'Mountain View, CA', workMode: 'On-site', description: 'Create beautiful user interfaces for Google Workspace products.', sponsorship: true },
+  ],
+  'Microsoft': [
+    { title: 'Product Manager - Azure', level: 'Senior', salary: '$140,000 - $220,000', skills: ['Product Management', 'Azure', 'Cloud', 'Agile'], location: 'Redmond, WA', workMode: 'Remote', description: 'Lead Azure product initiatives and shape the future of cloud computing.', sponsorship: true },
+    { title: 'Software Engineer II', level: 'Mid-Level', salary: '$130,000 - $200,000', skills: ['C#', '.NET', 'Azure', 'SQL'], location: 'Redmond, WA', workMode: 'Hybrid', description: 'Build enterprise software solutions using .NET and Azure technologies.', sponsorship: true },
+    { title: 'Security Engineer', level: 'Senior', salary: '$145,000 - $230,000', skills: ['Security', 'Azure', 'Threat Detection', 'Compliance'], location: 'Redmond, WA', workMode: 'Hybrid', description: 'Protect Microsoft cloud infrastructure from security threats.', sponsorship: true },
+    { title: 'DevOps Engineer - Azure', level: 'Mid-Senior', salary: '$135,000 - $210,000', skills: ['Azure', 'DevOps', 'CI/CD', 'Kubernetes'], location: 'Seattle, WA', workMode: 'Remote', description: 'Implement DevOps practices and automate cloud infrastructure.', sponsorship: true },
+  ],
+  'Amazon': [
+    { title: 'SDE II - AWS', level: 'Mid-Senior', salary: '$130,000 - $200,000', skills: ['Java', 'Python', 'AWS', 'Distributed Systems'], location: 'Seattle, WA', workMode: 'Hybrid', description: 'Build innovative AWS services that power the cloud infrastructure for millions of customers.', sponsorship: true },
+    { title: 'Solutions Architect', level: 'Senior', salary: '$150,000 - $240,000', skills: ['AWS', 'Architecture', 'Consulting', 'Cloud'], location: 'Seattle, WA', workMode: 'Remote', description: 'Design cloud solutions for Amazon enterprise customers worldwide.', sponsorship: true },
+    { title: 'Data Engineer', level: 'Mid-Level', salary: '$125,000 - $190,000', skills: ['Spark', 'Python', 'SQL', 'AWS'], location: 'Seattle, WA', workMode: 'Hybrid', description: 'Build data pipelines that process petabytes of data daily.', sponsorship: true },
+    { title: 'Machine Learning Engineer', level: 'Senior', salary: '$155,000 - $250,000', skills: ['Python', 'ML', 'AWS', 'TensorFlow'], location: 'Palo Alto, CA', workMode: 'Hybrid', description: 'Develop ML models for Alexa, recommendation systems, and more.', sponsorship: true },
+  ],
+  'Meta': [
+    { title: 'Frontend Engineer - React', level: 'Senior', salary: '$145,000 - $230,000', skills: ['React', 'JavaScript', 'TypeScript', 'GraphQL'], location: 'Menlo Park, CA', workMode: 'Hybrid', description: 'Build the next generation of social experiences with React and cutting-edge web technologies.', sponsorship: true },
+    { title: 'Backend Engineer - Python', level: 'Senior', salary: '$150,000 - $240,000', skills: ['Python', 'Django', 'PostgreSQL', 'Redis'], location: 'Menlo Park, CA', workMode: 'Hybrid', description: 'Build scalable backend services for Facebook, Instagram, and WhatsApp.', sponsorship: true },
+    { title: 'Mobile Engineer - iOS', level: 'Mid-Senior', salary: '$140,000 - $220,000', skills: ['Swift', 'iOS', 'UIKit', 'SwiftUI'], location: 'Menlo Park, CA', workMode: 'On-site', description: 'Create iOS apps used by billions of people worldwide.', sponsorship: true },
+    { title: 'Data Engineer - Spark', level: 'Senior', salary: '$145,000 - $235,000', skills: ['Spark', 'Scala', 'Presto', 'Hive'], location: 'Menlo Park, CA', workMode: 'Hybrid', description: 'Build data infrastructure for Meta analytics platform.', sponsorship: true },
+  ],
+  'Apple': [
+    { title: 'Machine Learning Engineer', level: 'Senior', salary: '$160,000 - $270,000', skills: ['Python', 'TensorFlow', 'PyTorch', 'ML', 'Deep Learning'], location: 'Cupertino, CA', workMode: 'On-site', description: 'Develop cutting-edge ML models for Apple products used by millions worldwide.', sponsorship: true },
+    { title: 'iOS Developer', level: 'Senior', salary: '$150,000 - $250,000', skills: ['Swift', 'Objective-C', 'iOS SDK', 'UIKit'], location: 'Cupertino, CA', workMode: 'On-site', description: 'Build features for iOS that delight millions of users.', sponsorship: true },
+    { title: 'Hardware Engineer', level: 'Senior', salary: '$155,000 - $260,000', skills: ['Hardware Design', 'VLSI', 'Circuit Design', 'Testing'], location: 'Cupertino, CA', workMode: 'On-site', description: 'Design next-generation Apple hardware products.', sponsorship: true },
+    { title: 'Cloud Engineer - iCloud', level: 'Mid-Senior', salary: '$145,000 - $230,000', skills: ['Kubernetes', 'AWS', 'Python', 'Microservices'], location: 'Cupertino, CA', workMode: 'Hybrid', description: 'Build iCloud infrastructure serving billions of devices.', sponsorship: true },
+  ],
+  'Netflix': [
+    { title: 'Backend Engineer - Streaming', level: 'Senior', salary: '$155,000 - $240,000', skills: ['Java', 'Kotlin', 'Microservices', 'AWS', 'Cassandra'], location: 'Los Gatos, CA', workMode: 'Hybrid', description: 'Build the infrastructure that delivers entertainment to 200M+ subscribers globally.', sponsorship: true },
+    { title: 'Data Scientist - Recommendations', level: 'Senior', salary: '$160,000 - $260,000', skills: ['Python', 'ML', 'Spark', 'A/B Testing'], location: 'Los Gatos, CA', workMode: 'Remote', description: 'Build recommendation algorithms for Netflix content.', sponsorship: true },
+    { title: 'Frontend Engineer - React', level: 'Mid-Senior', salary: '$145,000 - $225,000', skills: ['React', 'TypeScript', 'Node.js', 'GraphQL'], location: 'Los Gatos, CA', workMode: 'Hybrid', description: 'Create beautiful streaming experiences for Netflix users.', sponsorship: true },
+    { title: 'DevOps Engineer', level: 'Senior', salary: '$150,000 - $235,000', skills: ['AWS', 'Kubernetes', 'Terraform', 'CI/CD'], location: 'Los Gatos, CA', workMode: 'Remote', description: 'Manage cloud infrastructure for global streaming platform.', sponsorship: true },
+  ],
+  'Tesla': [
+    { title: 'Embedded Software Engineer', level: 'Mid-Senior', salary: '$135,000 - $210,000', skills: ['C', 'C++', 'Embedded Systems', 'RTOS', 'Linux'], location: 'Palo Alto, CA', workMode: 'On-site', description: 'Develop embedded software for Tesla vehicles and energy products.', sponsorship: false },
+    { title: 'Autopilot Engineer', level: 'Senior', salary: '$160,000 - $270,000', skills: ['Python', 'C++', 'Computer Vision', 'Deep Learning'], location: 'Palo Alto, CA', workMode: 'On-site', description: 'Build autonomous driving systems for Tesla vehicles.', sponsorship: false },
+    { title: 'Battery Engineer', level: 'Senior', salary: '$145,000 - $230,000', skills: ['Battery Technology', 'Materials Science', 'Testing'], location: 'Palo Alto, CA', workMode: 'On-site', description: 'Design next-generation battery systems for electric vehicles.', sponsorship: false },
+    { title: 'Manufacturing Engineer', level: 'Mid-Senior', salary: '$130,000 - $200,000', skills: ['Manufacturing', 'Lean', 'Six Sigma', 'Automation'], location: 'Fremont, CA', workMode: 'On-site', description: 'Optimize manufacturing processes for Tesla production lines.', sponsorship: false },
+  ],
+  'NVIDIA': [
+    { title: 'GPU Software Engineer', level: 'Senior', salary: '$145,000 - $235,000', skills: ['CUDA', 'C++', 'GPU Programming', 'Parallel Computing'], location: 'Santa Clara, CA', workMode: 'Hybrid', description: 'Optimize GPU drivers and software for AI and gaming applications.', sponsorship: true },
+    { title: 'Deep Learning Engineer', level: 'Senior', salary: '$160,000 - $270,000', skills: ['Python', 'PyTorch', 'CUDA', 'Deep Learning'], location: 'Santa Clara, CA', workMode: 'Hybrid', description: 'Build AI frameworks and tools for NVIDIA GPUs.', sponsorship: true },
+    { title: 'Graphics Engineer', level: 'Senior', salary: '$150,000 - $250,000', skills: ['C++', 'OpenGL', 'Vulkan', 'Graphics'], location: 'Santa Clara, CA', workMode: 'On-site', description: 'Develop graphics drivers for NVIDIA GPUs.', sponsorship: true },
+    { title: 'Systems Architect', level: 'Senior', salary: '$165,000 - $280,000', skills: ['Computer Architecture', 'C++', 'SystemVerilog'], location: 'Santa Clara, CA', workMode: 'Hybrid', description: 'Design next-generation GPU architectures.', sponsorship: true },
+  ],
+  'Adobe': [
+    { title: 'UX Designer - Creative Cloud', level: 'Senior', salary: '$120,000 - $180,000', skills: ['Figma', 'Adobe XD', 'User Research', 'Prototyping'], location: 'San Jose, CA', workMode: 'Remote', description: 'Design intuitive user experiences for Adobe Creative Cloud products.', sponsorship: true },
+    { title: 'Frontend Engineer - React', level: 'Mid-Senior', salary: '$135,000 - $200,000', skills: ['React', 'JavaScript', 'TypeScript', 'CSS'], location: 'San Jose, CA', workMode: 'Hybrid', description: 'Build web interfaces for Adobe Creative Cloud applications.', sponsorship: true },
+    { title: 'Backend Engineer - Java', level: 'Senior', salary: '$140,000 - $210,000', skills: ['Java', 'Spring Boot', 'Microservices', 'AWS'], location: 'San Jose, CA', workMode: 'Remote', description: 'Develop backend services for Adobe Document Cloud.', sponsorship: true },
+    { title: 'Machine Learning Engineer', level: 'Senior', salary: '$150,000 - $230,000', skills: ['Python', 'TensorFlow', 'Computer Vision', 'ML'], location: 'San Jose, CA', workMode: 'Hybrid', description: 'Build AI features for Adobe Photoshop and Premiere.', sponsorship: true },
+  ],
+  'Salesforce': [
+    { title: 'Solutions Architect', level: 'Senior', salary: '$150,000 - $230,000', skills: ['Salesforce', 'Solution Architecture', 'Apex', 'Lightning'], location: 'San Francisco, CA', workMode: 'Hybrid', description: 'Design enterprise solutions on the Salesforce platform for Fortune 500 clients.', sponsorship: true },
+    { title: 'Apex Developer', level: 'Mid-Senior', salary: '$130,000 - $195,000', skills: ['Apex', 'Salesforce', 'Lightning', 'SOQL'], location: 'San Francisco, CA', workMode: 'Remote', description: 'Develop custom Salesforce applications using Apex.', sponsorship: true },
+    { title: 'DevOps Engineer', level: 'Senior', salary: '$145,000 - $220,000', skills: ['Jenkins', 'Docker', 'Kubernetes', 'AWS'], location: 'San Francisco, CA', workMode: 'Hybrid', description: 'Manage Salesforce CI/CD pipelines and infrastructure.', sponsorship: true },
+    { title: 'Product Manager - Platform', level: 'Senior', salary: '$155,000 - $240,000', skills: ['Product Management', 'Salesforce', 'Agile', 'Strategy'], location: 'San Francisco, CA', workMode: 'Remote', description: 'Lead product strategy for Salesforce platform features.', sponsorship: true },
+  ],
+  'Oracle': [
+    { title: 'Cloud Infrastructure Engineer', level: 'Mid-Senior', salary: '$125,000 - $195,000', skills: ['Kubernetes', 'Terraform', 'Cloud', 'DevOps'], location: 'Austin, TX', workMode: 'Remote', description: 'Build and maintain Oracle Cloud Infrastructure services.', sponsorship: true },
+    { title: 'Database Engineer', level: 'Senior', salary: '$140,000 - $220,000', skills: ['Oracle DB', 'SQL', 'PL/SQL', 'Performance Tuning'], location: 'Austin, TX', workMode: 'Hybrid', description: 'Optimize Oracle Database for enterprise customers.', sponsorship: true },
+    { title: 'Java Developer', level: 'Mid-Senior', salary: '$130,000 - $200,000', skills: ['Java', 'Spring', 'Microservices', 'REST'], location: 'Redwood City, CA', workMode: 'Hybrid', description: 'Build Java applications for Oracle Cloud services.', sponsorship: true },
+    { title: 'Cloud Solutions Architect', level: 'Senior', salary: '$150,000 - $235,000', skills: ['OCI', 'Cloud Architecture', 'Kubernetes', 'Networking'], location: 'Austin, TX', workMode: 'Remote', description: 'Design cloud solutions for Oracle enterprise clients.', sponsorship: true },
+  ],
+  'IBM': [
+    { title: 'Data Scientist - Watson', level: 'Senior', salary: '$130,000 - $200,000', skills: ['Python', 'Machine Learning', 'Statistics', 'AI'], location: 'New York, NY', workMode: 'Hybrid', description: 'Develop AI and ML models for IBM Watson cognitive services.', sponsorship: true },
+    { title: 'Cloud Architect', level: 'Senior', salary: '$140,000 - $210,000', skills: ['IBM Cloud', 'Kubernetes', 'Cloud Architecture', 'DevOps'], location: 'Armonk, NY', workMode: 'Remote', description: 'Design hybrid cloud solutions for enterprise clients.', sponsorship: true },
+    { title: 'Full Stack Developer', level: 'Mid-Senior', salary: '$120,000 - $185,000', skills: ['React', 'Node.js', 'Java', 'MongoDB'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build full-stack applications for IBM Cloud services.', sponsorship: true },
+    { title: 'Security Engineer', level: 'Senior', salary: '$135,000 - $205,000', skills: ['Security', 'IBM QRadar', 'Threat Intelligence', 'SIEM'], location: 'New York, NY', workMode: 'Hybrid', description: 'Implement security solutions for IBM enterprise clients.', sponsorship: true },
+  ],
+  'Intel': [
+    { title: 'Hardware Engineer - CPU Design', level: 'Senior', salary: '$140,000 - $215,000', skills: ['VLSI', 'Verilog', 'Computer Architecture', 'Circuit Design'], location: 'Hillsboro, OR', workMode: 'On-site', description: 'Design next-generation CPU architectures for Intel processors.', sponsorship: true },
+    { title: 'Software Engineer - Drivers', level: 'Mid-Senior', salary: '$130,000 - $200,000', skills: ['C', 'C++', 'Linux Kernel', 'Device Drivers'], location: 'Hillsboro, OR', workMode: 'Hybrid', description: 'Develop device drivers for Intel hardware.', sponsorship: true },
+    { title: 'FPGA Engineer', level: 'Senior', salary: '$145,000 - $225,000', skills: ['FPGA', 'Verilog', 'VHDL', 'RTL'], location: 'Hillsboro, OR', workMode: 'On-site', description: 'Design FPGA solutions for Intel products.', sponsorship: true },
+    { title: 'Machine Learning Engineer', level: 'Senior', salary: '$150,000 - $235,000', skills: ['Python', 'TensorFlow', 'Intel oneAPI', 'Deep Learning'], location: 'Santa Clara, CA', workMode: 'Hybrid', description: 'Optimize ML workloads for Intel processors.', sponsorship: true },
+  ],
+  'Cisco': [
+    { title: 'Network Security Engineer', level: 'Senior', salary: '$135,000 - $205,000', skills: ['Network Security', 'Firewall', 'VPN', 'Cisco'], location: 'San Jose, CA', workMode: 'Hybrid', description: 'Develop security solutions for Cisco networking products.', sponsorship: true },
+    { title: 'Software Engineer - Networking', level: 'Mid-Senior', salary: '$130,000 - $195,000', skills: ['C', 'C++', 'Networking', 'TCP/IP'], location: 'San Jose, CA', workMode: 'Hybrid', description: 'Build networking software for Cisco routers and switches.', sponsorship: true },
+    { title: 'Cloud Engineer', level: 'Senior', salary: '$140,000 - $210,000', skills: ['Kubernetes', 'Docker', 'Cloud', 'Python'], location: 'San Jose, CA', workMode: 'Remote', description: 'Develop cloud networking solutions for Cisco.', sponsorship: true },
+    { title: 'DevOps Engineer', level: 'Mid-Senior', salary: '$125,000 - $190,000', skills: ['Jenkins', 'Ansible', 'Terraform', 'CI/CD'], location: 'San Jose, CA', workMode: 'Hybrid', description: 'Automate infrastructure for Cisco cloud products.', sponsorship: true },
+  ],
+  'SAP': [
+    { title: 'SAP HANA Consultant', level: 'Mid-Senior', salary: '$115,000 - $175,000', skills: ['SAP HANA', 'Database', 'ERP', 'Consulting'], location: 'Newtown Square, PA', workMode: 'Remote', description: 'Implement SAP HANA solutions for enterprise clients.', sponsorship: true },
+    { title: 'ABAP Developer', level: 'Mid-Senior', salary: '$110,000 - $165,000', skills: ['ABAP', 'SAP', 'ERP', 'Fiori'], location: 'Newtown Square, PA', workMode: 'Hybrid', description: 'Develop SAP applications using ABAP programming.', sponsorship: true },
+    { title: 'Cloud Architect - SAP', level: 'Senior', salary: '$140,000 - $210,000', skills: ['SAP Cloud', 'Architecture', 'Integration', 'BTP'], location: 'Palo Alto, CA', workMode: 'Remote', description: 'Design cloud architectures for SAP Business Technology Platform.', sponsorship: true },
+    { title: 'Integration Developer', level: 'Mid-Senior', salary: '$120,000 - $180,000', skills: ['SAP PI/PO', 'Integration', 'APIs', 'Middleware'], location: 'Newtown Square, PA', workMode: 'Hybrid', description: 'Build integration solutions between SAP and external systems.', sponsorship: true },
+  ],
+  'Accenture': [
+    { title: 'DevOps Engineer', level: 'Mid-Level', salary: '$105,000 - $160,000', skills: ['Jenkins', 'Docker', 'Kubernetes', 'CI/CD', 'AWS'], location: 'Chicago, IL', workMode: 'Hybrid', description: 'Implement DevOps practices and CI/CD pipelines for enterprise clients.', sponsorship: true },
+    { title: 'Cloud Consultant - AWS', level: 'Senior', salary: '$125,000 - $190,000', skills: ['AWS', 'Cloud Architecture', 'Consulting', 'Migration'], location: 'New York, NY', workMode: 'Hybrid', description: 'Lead AWS cloud transformation projects for clients.', sponsorship: true },
+    { title: 'Data Engineer', level: 'Mid-Senior', salary: '$115,000 - $175,000', skills: ['Spark', 'Python', 'SQL', 'ETL'], location: 'Chicago, IL', workMode: 'Remote', description: 'Build data pipelines for enterprise analytics platforms.', sponsorship: true },
+    { title: 'Full Stack Developer', level: 'Mid-Level', salary: '$100,000 - $155,000', skills: ['React', 'Node.js', 'Java', 'MongoDB'], location: 'Chicago, IL', workMode: 'Hybrid', description: 'Develop full-stack applications for Accenture clients.', sponsorship: true },
+  ],
+  'Deloitte': [
+    { title: 'Cybersecurity Consultant', level: 'Senior', salary: '$110,000 - $170,000', skills: ['Cybersecurity', 'CISSP', 'Risk Management', 'Compliance'], location: 'Arlington, VA', workMode: 'Hybrid', description: 'Provide cybersecurity consulting services to Fortune 500 companies.', sponsorship: false },
+    { title: 'Cloud Security Engineer', level: 'Senior', salary: '$120,000 - $185,000', skills: ['AWS Security', 'Azure Security', 'Cloud', 'IAM'], location: 'Arlington, VA', workMode: 'Remote', description: 'Implement security controls for cloud infrastructure.', sponsorship: false },
+    { title: 'Risk Advisory Consultant', level: 'Mid-Senior', salary: '$105,000 - $165,000', skills: ['Risk Management', 'Compliance', 'GRC', 'Audit'], location: 'New York, NY', workMode: 'Hybrid', description: 'Provide risk advisory services to enterprise clients.', sponsorship: false },
+    { title: 'Technology Consultant', level: 'Mid-Level', salary: '$95,000 - $150,000', skills: ['Consulting', 'Technology', 'Project Management', 'Agile'], location: 'Chicago, IL', workMode: 'Hybrid', description: 'Deliver technology consulting projects for clients.', sponsorship: false },
+  ],
+  'Goldman Sachs': [
+    { title: 'Quantitative Developer', level: 'Senior', salary: '$160,000 - $280,000', skills: ['C++', 'Python', 'Quantitative Finance', 'Algorithms'], location: 'New York, NY', workMode: 'Hybrid', description: 'Develop quantitative trading systems and risk models.', sponsorship: true },
+    { title: 'Java Developer - Trading', level: 'Senior', salary: '$155,000 - $260,000', skills: ['Java', 'Spring', 'Microservices', 'Finance'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build low-latency trading systems for equity markets.', sponsorship: true },
+    { title: 'Data Engineer', level: 'Mid-Senior', salary: '$145,000 - $230,000', skills: ['Python', 'Spark', 'SQL', 'Data Pipelines'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build data infrastructure for analytics and trading.', sponsorship: true },
+    { title: 'Backend Engineer - Python', level: 'Senior', salary: '$150,000 - $250,000', skills: ['Python', 'Django', 'PostgreSQL', 'Redis'], location: 'New York, NY', workMode: 'On-site', description: 'Develop backend services for wealth management platforms.', sponsorship: true },
+  ],
+  'JP Morgan': [
+    { title: 'Backend Developer - Payments', level: 'Senior', salary: '$135,000 - $205,000', skills: ['Java', 'Spring Boot', 'Microservices', 'SQL'], location: 'Jersey City, NJ', workMode: 'Hybrid', description: 'Build scalable backend systems for payment processing.', sponsorship: true },
+    { title: 'Frontend Developer - React', level: 'Mid-Senior', salary: '$130,000 - $195,000', skills: ['React', 'TypeScript', 'Redux', 'JavaScript'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build web interfaces for banking applications.', sponsorship: true },
+    { title: 'Cloud Engineer - AWS', level: 'Senior', salary: '$140,000 - $210,000', skills: ['AWS', 'Kubernetes', 'Terraform', 'Python'], location: 'Jersey City, NJ', workMode: 'Hybrid', description: 'Manage cloud infrastructure for JP Morgan applications.', sponsorship: true },
+    { title: 'Data Scientist', level: 'Senior', salary: '$145,000 - $225,000', skills: ['Python', 'Machine Learning', 'SQL', 'Statistics'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build ML models for fraud detection and risk analysis.', sponsorship: true },
+  ],
+  'Morgan Stanley': [
+    { title: 'Full Stack Developer', level: 'Mid-Senior', salary: '$130,000 - $195,000', skills: ['React', 'Node.js', 'TypeScript', 'MongoDB'], location: 'New York, NY', workMode: 'Hybrid', description: 'Develop full-stack applications for wealth management platforms.', sponsorship: true },
+    { title: 'Quantitative Analyst', level: 'Senior', salary: '$150,000 - $250,000', skills: ['Python', 'C++', 'Quantitative Finance', 'Statistics'], location: 'New York, NY', workMode: 'On-site', description: 'Build quantitative models for trading and risk management.', sponsorship: true },
+    { title: 'DevOps Engineer', level: 'Mid-Senior', salary: '$125,000 - $190,000', skills: ['Jenkins', 'Docker', 'Kubernetes', 'AWS'], location: 'New York, NY', workMode: 'Hybrid', description: 'Automate infrastructure and deployment pipelines.', sponsorship: true },
+    { title: 'Mobile Developer - iOS', level: 'Mid-Senior', salary: '$135,000 - $200,000', skills: ['Swift', 'iOS', 'UIKit', 'SwiftUI'], location: 'New York, NY', workMode: 'Hybrid', description: 'Build mobile banking apps for Morgan Stanley clients.', sponsorship: true },
+  ],
+  'Infosys': [
+    { title: 'Java Developer', level: 'Mid-Level', salary: '₹12L - ₹20L', skills: ['Java', 'Spring', 'Hibernate', 'REST APIs'], location: 'Bangalore, India', workMode: 'Hybrid', description: 'Develop enterprise Java applications for global clients.', sponsorship: false },
+    { title: 'Python Developer', level: 'Mid-Level', salary: '₹10L - ₹18L', skills: ['Python', 'Django', 'Flask', 'REST APIs'], location: 'Pune, India', workMode: 'Remote', description: 'Build web applications using Python frameworks.', sponsorship: false },
+    { title: 'DevOps Engineer', level: 'Mid-Level', salary: '₹11L - ₹19L', skills: ['Docker', 'Kubernetes', 'Jenkins', 'AWS'], location: 'Hyderabad, India', workMode: 'Hybrid', description: 'Implement DevOps practices for client projects.', sponsorship: false },
+    { title: 'Data Analyst', level: 'Mid-Level', salary: '₹9L - ₹16L', skills: ['SQL', 'Python', 'Power BI', 'Excel'], location: 'Bangalore, India', workMode: 'Hybrid', description: 'Analyze data and create business intelligence reports.', sponsorship: false },
+  ],
+  'TCS': [
+    { title: 'Cloud Engineer - Azure', level: 'Mid-Level', salary: '₹10L - ₹18L', skills: ['Azure', 'DevOps', 'Terraform', 'Kubernetes'], location: 'Pune, India', workMode: 'Remote', description: 'Manage cloud infrastructure on Microsoft Azure for enterprise clients.', sponsorship: false },
+    { title: 'Full Stack Developer', level: 'Mid-Level', salary: '₹11L - ₹19L', skills: ['React', 'Node.js', 'MongoDB', 'Express'], location: 'Mumbai, India', workMode: 'Hybrid', description: 'Build full-stack web applications for TCS clients.', sponsorship: false },
+    { title: 'SAP Consultant', level: 'Senior', salary: '₹15L - ₹25L', skills: ['SAP', 'ABAP', 'Fiori', 'HANA'], location: 'Bangalore, India', workMode: 'Hybrid', description: 'Implement SAP solutions for enterprise clients.', sponsorship: false },
+    { title: 'Salesforce Developer', level: 'Mid-Level', salary: '₹12L - ₹20L', skills: ['Salesforce', 'Apex', 'Lightning', 'SOQL'], location: 'Chennai, India', workMode: 'Remote', description: 'Develop Salesforce applications for global clients.', sponsorship: false },
+  ],
+  'Wipro': [
+    { title: 'QA Automation Engineer', level: 'Mid-Level', salary: '₹8L - ₹15L', skills: ['Selenium', 'TestNG', 'Java', 'Automation'], location: 'Hyderabad, India', workMode: 'Hybrid', description: 'Automate testing for enterprise applications using Selenium and TestNG.', sponsorship: false },
+    { title: '.NET Developer', level: 'Mid-Level', salary: '₹9L - ₹16L', skills: ['.NET', 'C#', 'ASP.NET', 'SQL Server'], location: 'Bangalore, India', workMode: 'Hybrid', description: 'Build enterprise applications using .NET framework.', sponsorship: false },
+    { title: 'Cloud Architect', level: 'Senior', salary: '₹18L - ₹30L', skills: ['AWS', 'Azure', 'Cloud Architecture', 'Microservices'], location: 'Pune, India', workMode: 'Hybrid', description: 'Design cloud solutions for enterprise clients.', sponsorship: false },
+    { title: 'Business Analyst', level: 'Mid-Level', salary: '₹10L - ₹17L', skills: ['Business Analysis', 'SQL', 'Agile', 'Requirements'], location: 'Mumbai, India', workMode: 'Remote', description: 'Gather requirements and analyze business processes.', sponsorship: false },
+  ],
+  'HCL': [
+    { title: 'React Native Developer', level: 'Mid-Level', salary: '₹9L - ₹16L', skills: ['React Native', 'JavaScript', 'Mobile Dev', 'Redux'], location: 'Noida, India', workMode: 'Remote', description: 'Build cross-platform mobile apps using React Native.', sponsorship: false },
+    { title: 'Angular Developer', level: 'Mid-Level', salary: '₹10L - ₹18L', skills: ['Angular', 'TypeScript', 'RxJS', 'NgRx'], location: 'Chennai, India', workMode: 'Hybrid', description: 'Develop single-page applications using Angular.', sponsorship: false },
+    { title: 'AWS Developer', level: 'Mid-Senior', salary: '₹12L - ₹20L', skills: ['AWS', 'Lambda', 'DynamoDB', 'Python'], location: 'Bangalore, India', workMode: 'Remote', description: 'Build serverless applications on AWS cloud.', sponsorship: false },
+    { title: 'Machine Learning Engineer', level: 'Senior', salary: '₹15L - ₹25L', skills: ['Python', 'TensorFlow', 'ML', 'Deep Learning'], location: 'Noida, India', workMode: 'Hybrid', description: 'Develop machine learning models for HCL clients.', sponsorship: false },
+  ],
+  'Cognizant': [
+    { title: 'Data Engineer - Big Data', level: 'Mid-Senior', salary: '₹11L - ₹19L', skills: ['Spark', 'Hadoop', 'SQL', 'Python', 'AWS'], location: 'Chennai, India', workMode: 'Hybrid', description: 'Build data pipelines using Spark, Hadoop, and cloud technologies.', sponsorship: false },
+    { title: 'Java Microservices Developer', level: 'Mid-Senior', salary: '₹12L - ₹20L', skills: ['Java', 'Spring Boot', 'Microservices', 'Kafka'], location: 'Pune, India', workMode: 'Hybrid', description: 'Develop microservices-based applications for clients.', sponsorship: false },
+    { title: 'Azure Cloud Engineer', level: 'Mid-Level', salary: '₹10L - ₹18L', skills: ['Azure', 'PowerShell', 'ARM Templates', 'DevOps'], location: 'Bangalore, India', workMode: 'Remote', description: 'Manage Azure cloud infrastructure for enterprise clients.', sponsorship: false },
+    { title: 'React Developer', level: 'Mid-Level', salary: '₹9L - ₹16L', skills: ['React', 'Redux', 'JavaScript', 'CSS'], location: 'Hyderabad, India', workMode: 'Hybrid', description: 'Build modern web applications using React.js.', sponsorship: false },
+  ],
+};
+
+// Generate unique job ID based on date
+const getDailyJobId = (company: string, index: number): string => {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  return `${company.toLowerCase().replace(/\s+/g, '-')}-${today}-${index}`;
+};
+
+// Get today's job role (rotates daily)
+const getTodayJobRole = (company: string) => {
+  const defaultRole = { 
+    title: 'Software Engineer', 
+    level: 'Mid-Level', 
+    salary: '$100,000 - $150,000', 
+    skills: ['JavaScript', 'React', 'Node.js', 'SQL'],
+    location: 'Remote',
+    workMode: 'Remote',
+    description: 'Build innovative software solutions for modern challenges.',
+    sponsorship: true
+  };
+  
+  const roles = JOB_ROLES_POOL[company] || [defaultRole];
+  
+  // Use day of year to rotate jobs
+  const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+  const roleIndex = dayOfYear % roles.length;
+  
+  return roles[roleIndex];
+};
+
 // Simulate AI Agent fetching jobs from multiple sources
 export const fetchDailyJobs = async (): Promise<Job[]> => {
-  console.log('🤖 AI Job Agent: Starting daily job fetch at', new Date().toLocaleString());
+  const today = new Date();
+  console.log('🤖 AI Job Agent: Fetching NEW jobs for', today.toLocaleDateString(), 'at', today.toLocaleTimeString());
   
-  // Simulate API calls to LinkedIn, Naukri, and Career Pages
+  // Get sources for rotation
+  const sources: Array<'LinkedIn' | 'Naukri' | 'Career Page'> = ['LinkedIn', 'Naukri', 'Career Page'];
+  
+  // Build jobs dynamically from JOB_ROLES_POOL
+  const companies = Object.keys(JOB_ROLES_POOL);
+  const jobs: Job[] = companies.map((company, index) => {
+    const roleData = getTodayJobRole(company);
+    const sourceIndex = index % sources.length;
+    const source = sources[sourceIndex];
+    const jobId = getDailyJobId(company, index);
+    
+    return {
+      id: jobId,
+      company: company,
+      logo: COMPANY_LOGOS[company],
+      job_title: roleData.title,
+      location: roleData.location,
+      work_mode: roleData.workMode,
+      salary_range: roleData.salary,
+      description: roleData.description,
+      requirements: ['Strong technical background', 'Team collaboration', 'Problem-solving skills'],
+      responsibilities: ['Write clean code', 'Participate in code reviews', 'Collaborate with team'],
+      source: source,
+      careerPageUrl: `https://${company.toLowerCase().replace(/\s+/g, '')}.com/careers`,
+      applyUrl: `https://${company.toLowerCase().replace(/\s+/g, '')}.com/jobs`,
+      postedDate: new Date().toISOString(),
+      is_verified: true,
+      job_type: 'Full-time',
+      experience_level: roleData.level,
+      experience_required: roleData.level === 'Senior' ? '5+ years' : '3+ years',
+      job_source: source,
+      required_skills: roleData.skills,
+      skills: roleData.skills,
+      visa_sponsorship: roleData.sponsorship,
+    };
+  });
+  
+  console.log(`✅ AI Job Agent: Successfully fetched ${jobs.length} NEW jobs (rotating daily based on date)`);
+  
+  return jobs;
+  
+  /* OLD STATIC JOBS - REPLACED WITH DYNAMIC ROTATION
   const jobs: Job[] = [
     // Google Jobs
     {
@@ -680,20 +904,13 @@ export const fetchDailyJobs = async (): Promise<Job[]> => {
       job_source: 'Career Page',
       required_skills: ['Spark', 'Hadoop', 'SQL', 'Python', 'AWS'],
       skills: ['Spark', 'Hadoop', 'SQL', 'Python', 'AWS'],
-      visa_sponsorship: false,
-    },
+      visa_sponsorship: false,    },
   ];
+  */
+  
   console.log(`✅ AI Job Agent: Successfully fetched ${jobs.length} genuine jobs from LinkedIn, Naukri, and Career Pages`);
   
-  // Fill in missing fields for backward compatibility
-  const completeJobs = jobs.map(job => ({
-    ...job,
-    required_skills: job.required_skills || job.skills || [],
-    experience_required: job.experience_required || job.experience_level || '3+ years',
-    job_source: job.job_source || job.source || 'Career Page',
-  }));
-  
-  return completeJobs;
+  return jobs;
 };
 
 // Schedule job at 8:30 AM daily

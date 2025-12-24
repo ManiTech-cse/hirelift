@@ -11,6 +11,8 @@ import { generateN8nWorkflow } from './services/workflowGenerator';
 import { generateWorkdayConsoleScript } from './services/workdayFiller';
 import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcomeEmail } from './services/emailService';
 import { fetchDailyJobs, scheduleDailyJobFetch, getSourceBadgeColor } from './services/jobScraperAgent';
+import { fetchRealJobs, searchRealJobs } from './services/realJobFetcher';
+import { fetchCompanyCareerJobs, searchCompanyCareerJobs } from './services/companyCareerPageFetcher';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
@@ -21,7 +23,7 @@ import { Briefcase, ChevronRight, CheckCircle, Search, LogOut, AlertCircle, Mail
 import { AVAILABLE_JOBS } from './constants';
 
 // Default initial state
-const INITIAL_PROFILE: UserProfile = { 
+const INITIAL_PROFILE: UserProfile = {
   name: "Alex Doe",
   email: "alex.doe@example.com",
   skills: ["React", "TypeScript", "Tailwind"],
@@ -44,10 +46,11 @@ type ExtendedAppState = AppState | 'LANDING' | 'ABOUT' | 'RESUME' | 'LINKEDIN' |
 function App() {
   const [appState, setAppState] = useState<ExtendedAppState>('LANDING');
   const [currentPage, setCurrentPage] = useState<string>('home');
-  const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
-  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
+  const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE); const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
   const [dailyAIJobs, setDailyAIJobs] = useState<Job[]>([]);  // AI Agent Jobs
-  const [isLoadingJobs, setIsLoadingJobs] = useState(false);  // Landing / auth modal state
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');  // Search query
+  const [isSearching, setIsSearching] = useState(false);  // Search loading state// Landing / auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authName, setAuthName] = useState('');
@@ -55,11 +58,11 @@ function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
   const [suggestedPassword, setSuggestedPassword] = useState('');
-  const [authErrors, setAuthErrors] = useState<{name?: string, email?: string, password?: string, confirmPassword?: string}>({});
+  const [authErrors, setAuthErrors] = useState<{ name?: string, email?: string, password?: string, confirmPassword?: string }>({});
   const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);  
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
   // New state for bot simulation
@@ -93,8 +96,8 @@ function App() {
 
   // Validation function for auth
   const validateAuth = (): boolean => {
-    const errors: {name?: string, email?: string, password?: string, confirmPassword?: string} = {};
-    
+    const errors: { name?: string, email?: string, password?: string, confirmPassword?: string } = {};
+
     if (isRegisterMode) {
       if (!authName || authName.trim().length < 2) {
         errors.name = 'Name must be at least 2 characters';
@@ -116,7 +119,7 @@ function App() {
         errors.password = 'Password is required';
       }
     }
-    
+
     setAuthErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -125,7 +128,7 @@ function App() {
     if (!validateAuth()) {
       return;
     }
-    
+
     if (isRegisterMode) {
       setProfile(prev => ({ ...prev, email: authEmail, name: authName }));
       setAppState(AppState.PROFILE);
@@ -137,7 +140,7 @@ function App() {
       setShowAuthModal(false);
       showToast('Welcome back!');
     }
-    
+
     // Reset form
     setAuthName('');
     setAuthEmail('');
@@ -150,13 +153,13 @@ function App() {
   const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
     // Handle both old format (required_skills) and new format (skills)
     const jobSkills = job.skills || job.required_skills || [];
-    const skillMatches = jobSkills.filter(s => profileForCalc.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase())).length;
+    const skillMatches = jobSkills.filter(s => profileForCalc.skills.map(x => x.toLowerCase()).includes(s.toLowerCase())).length;
     const totalSkillsRequired = Math.max(1, jobSkills.length);
     const skillPercentage = (skillMatches / totalSkillsRequired);
-    
+
     // Base skill score: 40% base + up to 50% for actual matches
     const skillScore = 40 + Math.round(skillPercentage * 50);
-    
+
     // Experience bonus: up to 20%
     let expBonus = 0;
     const userYears = Number((profileForCalc.experience || '').replace(/[^0-9]/g, '')) || 0;
@@ -168,18 +171,16 @@ function App() {
     } else if (userYears > 0) {
       expBonus = 10; // Give bonus if user has some experience even if job years unclear
     }
-    
+
     // Random diversity boost: up to 10%
     const randomBoost = Math.floor(Math.random() * 11);
-    
+
     // Total: base 40 + skills up to 50 + exp up to 20 + random up to 10 = 40-120
     const total = Math.min(99, skillScore + expBonus + randomBoost);
-    
+
     // Ensure minimum 50% for any profile with jobs in database
     return Math.max(50, total);
-  };
-
-  const handleLandingJobClick = (job: Job) => {
+  }; const handleLandingJobClick = (job: Job) => {
     setLandingSelectedJob(job);
     // If user already inside application flow, let them continue; otherwise require auth
     if (appState === 'LANDING') {
@@ -193,10 +194,60 @@ function App() {
       // Fall back to opening profile
       setAppState(AppState.PROFILE);
     }
-  };
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  }; const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000); 
+    setTimeout(() => setToast(null), 4000);
+  };
+  // Handle real job search - Fetches GENUINE jobs from company career pages
+  const handleSearchJobs = async () => {
+    if (!searchQuery.trim()) {
+      // No search query - fetch ALL genuine jobs from company career pages
+      setIsSearching(true);
+      setIsLoadingJobs(true);
+      try {
+        console.log('🏢 Fetching GENUINE jobs from company career pages (Amazon, Netflix, Spotify, Airbnb, Uber)...');
+        const careerPageJobs = await fetchCompanyCareerJobs();
+        if (careerPageJobs.length > 0) {
+          setDailyAIJobs(careerPageJobs);
+          showToast(`✅ Found ${careerPageJobs.length} genuine jobs from official career pages!`);
+        } else {
+          showToast('No jobs found from company career pages. Please try again.', 'error');
+        }
+      } catch (error) {
+        console.error('❌ Company career page fetch error:', error);
+        showToast('Failed to fetch jobs from career pages. Please try again.', 'error');
+      } finally {
+        setIsSearching(false);
+        setIsLoadingJobs(false);
+      }
+    } else {
+      // Search with query from company career pages
+      setIsSearching(true);
+      setIsLoadingJobs(true);
+      try {
+        console.log(`🔍 Searching company career pages for: "${searchQuery}"`);
+        const searchResults = await searchCompanyCareerJobs(searchQuery);
+        if (searchResults.length > 0) {
+          setDailyAIJobs(searchResults);
+          showToast(`✅ Found ${searchResults.length} matching jobs from career pages!`);
+        } else {
+          showToast(`No jobs found for "${searchQuery}" on career pages. Try different keywords.`, 'error');
+        }
+      } catch (error) {
+        console.error('❌ Search error:', error);
+        showToast('Search failed. Please try again.', 'error');
+      } finally {
+        setIsSearching(false);
+        setIsLoadingJobs(false);
+      }
+    }
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearchJobs();
+    }
   };
 
   // Fetch AI Agent Jobs on component mount
@@ -213,9 +264,9 @@ function App() {
         setIsLoadingJobs(false);
       }
     };
-    
+
     loadAIJobs();
-    
+
     // Schedule daily job fetch at 8:30 AM
     scheduleDailyJobFetch();
   }, []);
@@ -223,7 +274,7 @@ function App() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAppState(AppState.PROFILE);
-    
+
     // Send welcome email
     if (profile.email) {
       await sendWelcomeEmail(profile);
@@ -303,8 +354,8 @@ function App() {
       } catch (apiErr) {
         // Local fallback: build smart matches from AVAILABLE_JOBS using resume/skills/experience
         const built = (AVAILABLE_JOBS as Job[]).map(j => {
-          const matched_skills = j.required_skills.filter(s => profile.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase()));
-          const missing_skills = j.required_skills.filter(s => !profile.skills.map(x=>x.toLowerCase()).includes(s.toLowerCase()));
+          const matched_skills = j.required_skills.filter(s => profile.skills.map(x => x.toLowerCase()).includes(s.toLowerCase()));
+          const missing_skills = j.required_skills.filter(s => !profile.skills.map(x => x.toLowerCase()).includes(s.toLowerCase()));
           // Reuse computeMatchScore for a sensible percentage
           const match_percentage = computeMatchScore(j, profile);
           const experienceNote = (() => {
@@ -351,7 +402,7 @@ function App() {
 
       setMatchedJobs(results.matched_jobs);
       setAppState(AppState.DASHBOARD);
-      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);    
+      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);
     } catch (err) {
       console.error(err);
       showToast("Failed to fetch real-time jobs. Please try again.", "error");
@@ -363,21 +414,21 @@ function App() {
     return jobs.filter(job => {
       // Match percentage filter
       if (job.match_percentage < jobFilters.matchPercentage) return false;
-      
+
       // Workday filter (only show jobs with auto-apply eligible status)
       if (jobFilters.workdayOnly && !job.auto_apply_eligible) return false;
-      
+
       // Job type filter (if any selected)
       // Note: This is a demo - in production you'd check job.jobType field
-      
+
       // Remote filter (demo purposes)
       // Note: You'd check if job.location is 'Remote'
-      
+
       return true;
     });
   };
   const getJobId = (job: MatchedJob) => `${job.company}-${job.job_title}`;
-  
+
   const handleAutoApply = async (job: MatchedJob) => {
     const jobId = getJobId(job);
     setApplyingJobs(prev => new Set(prev).add(jobId));
@@ -400,9 +451,7 @@ function App() {
     setProgressSteps(steps);
     setProgressStepIdx(0);
     setProgressOpen(true);
-    setProgressError(null);
-
-    // Step 1: Open careers page
+    setProgressError(null);    // Step 1: Open careers page
     setProgressStepIdx(0);
     const careerPageUrl = job.apply_url || `https://www.google.com/search?q=${encodeURIComponent(job.company + ' careers')}`;
     let iframe: HTMLIFrameElement | null = null;
@@ -459,9 +508,7 @@ function App() {
       const next = new Set(prev);
       next.delete(jobId);
       return next;
-    });
-
-    if (emailSent) {
+    }); if (emailSent) {
       showToast(`✅ Email sent to ${profile.email} - Check your inbox!`);
     } else {
       showToast(`✅ Application submitted! Email backed up locally`, 'success');
@@ -500,7 +547,7 @@ function App() {
       const newModes = prev.workModes.includes(mode)
         ? prev.workModes.filter(m => m !== mode)
         : [...prev.workModes, mode];
-      
+
       let newPrimary = prev.primaryWorkMode;
       if (!newModes.includes(newPrimary)) {
         newPrimary = newModes.length > 0 ? newModes[0] : '';
@@ -541,43 +588,36 @@ function App() {
           <div className="absolute left-8 top-32 w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center animate-float-slow shadow-lg hover:shadow-xl transition-shadow duration-300">
             <FileText size={40} className="text-blue-400 opacity-70" />
           </div>
-          
+
           {/* Briefcase bubble - top right */}
           <div className="absolute right-12 top-16 w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center animate-float-medium shadow-md hover:shadow-lg transition-shadow duration-300">
             <Briefcase size={32} className="text-amber-400 opacity-70" />
           </div>
-          
+
           {/* User bubble - center bottom */}
           <div className="absolute left-1/3 bottom-20 w-28 h-28 bg-green-100 rounded-full flex items-center justify-center animate-float-zigzag shadow-md hover:shadow-lg transition-shadow duration-300">
             <User size={36} className="text-green-400 opacity-70" />
           </div>
-          
+
           {/* Sparkles bubble - right side */}
           <div className="absolute right-1/4 bottom-40 w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center animate-float-fast shadow-md hover:shadow-lg transition-shadow duration-300">
             <Sparkles size={28} className="text-purple-400 opacity-70" />
           </div>
-          
+
           {/* Additional Globe bubble - top center */}
           <div className="absolute left-1/2 -translate-x-1/2 top-10 w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center animate-bubble-pulse shadow-sm">
             <Globe size={24} className="text-indigo-400 opacity-70" />
           </div>
-          
+
           {/* Additional Mail bubble - left side */}
           <div className="absolute left-1/4 top-2/3 w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center animate-float-medium shadow-md hover:shadow-lg transition-shadow duration-300">
             <Mail size={28} className="text-pink-400 opacity-70" />
           </div>
         </div>        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-16 flex flex-col items-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-center mb-2 sm:mb-4 leading-tight tracking-tight">Find Your Next <span className="text-blue-600">Dream Job</span> Instantly</h1>
-          <p className="text-base sm:text-lg text-slate-500 text-center mb-6 sm:mb-8 max-w-2xl px-2">AI-powered job search that matches your resume, skills, and experience to the best roles. No more noise—just real opportunities from official career pages.</p>
-          <div className="w-full max-w-xl mb-8 sm:mb-12 px-2">
-            <div className="flex items-center bg-white border border-slate-200 rounded-full shadow-md px-3 sm:px-4 py-2 gap-2">
-              <Search size={18} className="text-blue-500 flex-shrink-0" />
-              <input className="flex-1 bg-transparent outline-none text-sm sm:text-lg px-2" placeholder="Search jobs, skills... (Demo)" disabled />
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-full font-semibold shadow text-xs sm:text-sm whitespace-nowrap">Search</button>
-            </div>
-          </div>          <div className="w-full max-w-5xl px-2">
+          <p className="text-base sm:text-lg text-slate-500 text-center mb-6 sm:mb-8 max-w-2xl px-2">AI-powered job search that matches your resume, skills, and experience to the best roles. No more noise—just real opportunities from official career pages.</p><div className="w-full max-w-5xl px-2">
             {/* Hidden header - AI agent still works in background */}
-            
+
             {isLoadingJobs ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -588,18 +628,18 @@ function App() {
                 {dailyAIJobs.slice(0, 25).map((job) => {
                   const score = computeMatchScore(job, INITIAL_PROFILE);
                   return (
-                    <button 
-                      key={job.id} 
-                      onClick={() => handleLandingJobClick(job)} 
+                    <button
+                      key={job.id}
+                      onClick={() => handleLandingJobClick(job)}
                       className="group bg-white border-2 border-slate-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-blue-400 transition-all duration-300 p-6 flex flex-col gap-3 relative overflow-hidden transform hover:-translate-y-1"
                     >                      {/* Company Logo Header */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-slate-200 shadow-sm">
                             {job.logo ? (
-                              <img 
-                                src={job.logo} 
-                                alt={`${job.company} logo`} 
+                              <img
+                                src={job.logo}
+                                alt={`${job.company} logo`}
                                 className="w-full h-full object-contain p-1.5"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
@@ -698,7 +738,7 @@ function App() {
             {/* View All Jobs CTA */}
             {dailyAIJobs.length > 0 && (
               <div className="mt-8 text-center">
-                <button 
+                <button
                   onClick={() => {
                     setShowAuthModal(true);
                     setIsRegisterMode(true);
@@ -742,7 +782,7 @@ function App() {
                       </p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       setShowAuthModal(false);
                       setAuthErrors({});
@@ -751,7 +791,7 @@ function App() {
                       setAuthPassword('');
                       setAuthConfirmPassword('');
                       setSuggestedPassword('');
-                    }} 
+                    }}
                     className="text-slate-400 hover:text-slate-600 transition-colors p-2 hover:bg-white/50 rounded-lg"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -770,14 +810,14 @@ function App() {
                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                           <User className="w-5 h-5" />
                         </div>
-                        <input 
-                          value={authName} 
+                        <input
+                          value={authName}
                           onChange={e => {
                             setAuthName(e.target.value);
-                            setAuthErrors(prev => ({...prev, name: undefined}));
-                          }} 
+                            setAuthErrors(prev => ({ ...prev, name: undefined }));
+                          }}
                           className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.name ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
-                          placeholder="John Doe" 
+                          placeholder="John Doe"
                         />
                       </div>
                       {authErrors.name && (
@@ -796,15 +836,15 @@ function App() {
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                         <Mail className="w-5 h-5" />
                       </div>
-                      <input 
-                        value={authEmail} 
+                      <input
+                        value={authEmail}
                         onChange={e => {
                           setAuthEmail(e.target.value);
-                          setAuthErrors(prev => ({...prev, email: undefined}));
-                        }} 
+                          setAuthErrors(prev => ({ ...prev, email: undefined }));
+                        }}
                         type="email"
                         className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.email ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
-                        placeholder="john@example.com" 
+                        placeholder="john@example.com"
                       />
                     </div>
                     {authErrors.email && (
@@ -822,20 +862,20 @@ function App() {
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                         <Lock className="w-5 h-5" />
                       </div>
-                      <input 
-                        value={authPassword} 
+                      <input
+                        value={authPassword}
                         onChange={e => {
                           setAuthPassword(e.target.value);
-                          setAuthErrors(prev => ({...prev, password: undefined}));
-                        }} 
-                        type="password" 
+                          setAuthErrors(prev => ({ ...prev, password: undefined }));
+                        }}
+                        type="password"
                         className={`w-full pl-11 pr-24 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.password ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
-                        placeholder="Enter password" 
+                        placeholder="Enter password"
                       />
                       {isRegisterMode && (
-                        <button 
-                          type="button" 
-                          onClick={handleSuggestPassword} 
+                        <button
+                          type="button"
+                          onClick={handleSuggestPassword}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-3 py-1.5 rounded-lg hover:shadow-lg transition-all font-semibold"
                         >
                           Generate
@@ -864,15 +904,15 @@ function App() {
                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                           <Lock className="w-5 h-5" />
                         </div>
-                        <input 
-                          value={authConfirmPassword} 
+                        <input
+                          value={authConfirmPassword}
                           onChange={e => {
                             setAuthConfirmPassword(e.target.value);
-                            setAuthErrors(prev => ({...prev, confirmPassword: undefined}));
-                          }} 
-                          type="password" 
+                            setAuthErrors(prev => ({ ...prev, confirmPassword: undefined }));
+                          }}
+                          type="password"
                           className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.confirmPassword ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
-                          placeholder="Confirm your password" 
+                          placeholder="Confirm your password"
                         />
                         {authPassword && authConfirmPassword && authPassword === authConfirmPassword && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
@@ -892,7 +932,7 @@ function App() {
 
                 {/* Action Buttons */}
                 <div className="mt-6 space-y-3">
-                  <button 
+                  <button
                     onClick={handleAuthSubmit}
                     className={`w-full bg-gradient-to-r ${isRegisterMode ? 'from-purple-600 to-pink-600' : 'from-blue-600 to-cyan-600'} text-white px-6 py-3 rounded-xl font-semibold text-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2`}
                   >
@@ -908,13 +948,13 @@ function App() {
                       </>
                     )}
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => {
                       setIsRegisterMode(!isRegisterMode);
                       setAuthErrors({});
                       setSuggestedPassword('');
-                    }} 
+                    }}
                     className="w-full bg-white/80 backdrop-blur-sm text-slate-700 px-6 py-3 rounded-xl font-medium text-sm hover:bg-white hover:shadow-lg transition-all duration-300 border-2 border-white/50"
                   >
                     {isRegisterMode ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
@@ -947,17 +987,17 @@ function App() {
             <h1 className="text-3xl font-bold text-slate-900">HireLift</h1>
             <p className="text-slate-500 mt-2">Real-time AI job matching & auto-apply.</p>
           </div>
-          
+
           <form onSubmit={handleLogin} className="space-y-6">
             <Input label="Full Name" type="text" placeholder="Alex Doe" required />
             <Input label="Email Address" type="email" placeholder="you@example.com" defaultValue="demo@hirelift.ai" required />
             <Input label="Password" type="password" placeholder="••••••••" defaultValue="password" required />
-            
+
             <Button type="submit" className="w-full py-3 text-lg">
               Start Search
             </Button>
           </form>
-          
+
           <p className="mt-6 text-center text-sm text-slate-400">
             Powered by Google Gemini 2.5
           </p>
@@ -997,33 +1037,33 @@ function App() {
             <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
             <form onSubmit={handleProfileSubmit} className="p-6 sm:p-8 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <Input 
-                  label="Full Name" 
-                  value={profile.name} 
-                  onChange={e => setProfile({...profile, name: e.target.value})}
+                <Input
+                  label="Full Name"
+                  value={profile.name}
+                  onChange={e => setProfile({ ...profile, name: e.target.value })}
                   className="text-sm"
                 />
-                <Input 
-                  label="Years of Experience" 
-                  value={profile.experience} 
-                  onChange={e => setProfile({...profile, experience: e.target.value})}
+                <Input
+                  label="Years of Experience"
+                  value={profile.experience}
+                  onChange={e => setProfile({ ...profile, experience: e.target.value })}
                   placeholder="e.g. 4 years"
                   className="text-sm"
                 />
               </div>
-              
-              <Input 
-                label="Preferred Roles (Comma separated)" 
-                value={profile.preferredRoles.join(', ')} 
-                onChange={e => setProfile({...profile, preferredRoles: e.target.value.split(',').map(s => s.trim())})}
+
+              <Input
+                label="Preferred Roles (Comma separated)"
+                value={profile.preferredRoles.join(', ')}
+                onChange={e => setProfile({ ...profile, preferredRoles: e.target.value.split(',').map(s => s.trim()) })}
                 placeholder="e.g. Frontend Developer, UI Engineer"
                 className="text-sm"
               />
-              
-              <Input 
-                label="Skills (Comma separated)" 
-                value={profile.skills.join(', ')} 
-                onChange={e => setProfile({...profile, skills: e.target.value.split(',').map(s => s.trim())})}
+
+              <Input
+                label="Skills (Comma separated)"
+                value={profile.skills.join(', ')}
+                onChange={e => setProfile({ ...profile, skills: e.target.value.split(',').map(s => s.trim()) })}
                 placeholder="e.g. React, Node.js, Python"
                 className="text-sm"
               />
@@ -1034,38 +1074,38 @@ function App() {
                   <MapPin size={16} className="text-blue-500" />
                   <h3>Job Preference</h3>
                 </div>
-                
+
                 {/* Work Modes */}
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Work Modes (Multi-select)</label>
                   <div className="flex flex-wrap gap-2 sm:gap-3">
                     {['Remote', 'Hybrid', 'Onsite'].map(mode => {
-                       const isSelected = profile.workModes.includes(mode);
-                       const isPrimary = profile.primaryWorkMode === mode;
-                       return (
+                      const isSelected = profile.workModes.includes(mode);
+                      const isPrimary = profile.primaryWorkMode === mode;
+                      return (
                         <div key={mode} className={`flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border transition-all ${isSelected ? 'bg-white border-blue-300 shadow-sm' : 'bg-slate-100 border-transparent opacity-70 hover:opacity-100'}`}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             id={`mode-${mode}`}
                             checked={isSelected}
                             onChange={() => handleWorkModeToggle(mode)}
-                            className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4" 
+                            className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
                           />
                           <label htmlFor={`mode-${mode}`} className="text-xs sm:text-sm font-medium text-slate-700 cursor-pointer select-none">
                             {mode}
                           </label>
-                          
+
                           {isSelected && (
-                             <button
-                               type="button"
-                               onClick={() => setProfile({...profile, primaryWorkMode: mode})}
-                               className={`ml-1 sm:ml-2 text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full transition-colors font-bold uppercase tracking-wide ${isPrimary ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
-                             >
-                               {isPrimary ? 'Primary' : 'Set'}
-                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setProfile({ ...profile, primaryWorkMode: mode })}
+                              className={`ml-1 sm:ml-2 text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full transition-colors font-bold uppercase tracking-wide ${isPrimary ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
+                            >
+                              {isPrimary ? 'Primary' : 'Set'}
+                            </button>
                           )}
                         </div>
-                       );
+                      );
                     })}
                   </div>
                   {profile.workModes.length === 0 && <p className="text-xs text-red-400 mt-1">Please select at least one work mode.</p>}
@@ -1076,30 +1116,30 @@ function App() {
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Specific Cities / Countries (Optional)</label>
                   <div className="relative">
                     <Globe size={14} className="absolute left-3 top-3 text-slate-400" />
-                    <input 
+                    <input
                       className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                      value={profile.jobLocation.join(', ')} 
-                      onChange={e => setProfile({...profile, jobLocation: e.target.value.split(',').map(s => s.trim())})}
+                      value={profile.jobLocation.join(', ')}
+                      onChange={e => setProfile({ ...profile, jobLocation: e.target.value.split(',').map(s => s.trim()) })}
                       placeholder="e.g. New York, London, Berlin"
                     />
                   </div>              </div>
               </div>
 
-              <FileUpload 
+              <FileUpload
                 label="Upload Resume (PDF, DOC, DOCX or TXT)"
                 onFileSelect={setResumeFile}
                 onTextExtract={(text) => {
                   // Auto-extract text if user uploads a text file
                   if (text && text.length > 20) {
-                    setProfile({...profile, resumeText: text});
+                    setProfile({ ...profile, resumeText: text });
                   }
                 }}
               />
 
-              <TextArea 
-                label="Resume Text (Paste content or upload above)" 
+              <TextArea
+                label="Resume Text (Paste content or upload above)"
                 value={profile.resumeText}
-                onChange={e => setProfile({...profile, resumeText: e.target.value})}
+                onChange={e => setProfile({ ...profile, resumeText: e.target.value })}
                 className="font-mono text-xs sm:text-sm"
                 placeholder="Paste the text content of your resume here..."
               />
@@ -1126,9 +1166,9 @@ function App() {
         </div>
 
         <div className="max-w-3xl mx-auto relative z-10">
-          <Button 
-            variant="ghost" 
-            onClick={handleBackFromApplication} 
+          <Button
+            variant="ghost"
+            onClick={handleBackFromApplication}
             className="mb-6 pl-0 hover:bg-transparent hover:text-violet-600 text-slate-700"
           >
             <ArrowLeft size={20} className="mr-2" /> Back
@@ -1153,45 +1193,45 @@ function App() {
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-white/50 overflow-hidden">
             <div className="h-2 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500"></div>
             <form onSubmit={handleApplicationFormSubmit} className="p-8 space-y-6">
-              
+
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                 <h3 className="font-semibold text-blue-900 mb-1">Email Configuration</h3>
-                 <p className="text-sm text-blue-700 mb-4">Applications will be sent from this email address using your default mail client.</p>
-                 <Input 
-                    label="Your Email" 
-                    type="email"
-                    value={profile.email}
-                    onChange={e => setProfile({...profile, email: e.target.value})}
-                  />
+                <h3 className="font-semibold text-blue-900 mb-1">Email Configuration</h3>
+                <p className="text-sm text-blue-700 mb-4">Applications will be sent from this email address using your default mail client.</p>
+                <Input
+                  label="Your Email"
+                  type="email"
+                  value={profile.email}
+                  onChange={e => setProfile({ ...profile, email: e.target.value })}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <Input 
-                  label="LinkedIn URL" 
-                  placeholder="https://linkedin.com/in/..." 
+                <Input
+                  label="LinkedIn URL"
+                  placeholder="https://linkedin.com/in/..."
                   value={profile.linkedin || ''}
-                  onChange={e => setProfile({...profile, linkedin: e.target.value})}
+                  onChange={e => setProfile({ ...profile, linkedin: e.target.value })}
                 />
-                 <Input 
-                  label="Portfolio / GitHub URL" 
-                  placeholder="https://github.com/..." 
+                <Input
+                  label="Portfolio / GitHub URL"
+                  placeholder="https://github.com/..."
                   value={profile.portfolio || ''}
-                  onChange={e => setProfile({...profile, portfolio: e.target.value})}
+                  onChange={e => setProfile({ ...profile, portfolio: e.target.value })}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <Input 
-                  label="Availability" 
-                  placeholder="e.g. 2 weeks notice, Immediate" 
+                <Input
+                  label="Availability"
+                  placeholder="e.g. 2 weeks notice, Immediate"
                   value={profile.availability || ''}
-                  onChange={e => setProfile({...profile, availability: e.target.value})}
+                  onChange={e => setProfile({ ...profile, availability: e.target.value })}
                 />
-                 <Input 
-                  label="Salary Expectation" 
-                  placeholder="e.g. $90k - $110k" 
+                <Input
+                  label="Salary Expectation"
+                  placeholder="e.g. $90k - $110k"
                   value={profile.salaryExpectation || ''}
-                  onChange={e => setProfile({...profile, salaryExpectation: e.target.value})}
+                  onChange={e => setProfile({ ...profile, salaryExpectation: e.target.value })}
                 />
               </div>              <div className="relative">
                 <div className="flex justify-between items-end mb-1.5">
@@ -1199,24 +1239,23 @@ function App() {
                     <label className="text-sm font-medium text-slate-700">Cover Letter (Template)</label>
                     <p className="text-xs text-slate-500 mt-0.5">Customized for each application</p>
                   </div>
-                  <Button 
+                  <Button
                     type="button"
-                    variant="ghost" 
-                    onClick={handleGenerateCoverLetter} 
+                    variant="ghost"
+                    onClick={handleGenerateCoverLetter}
                     isLoading={isGeneratingLetter}
                     className="text-xs h-8 px-2 text-blue-600 bg-blue-50 hover:bg-blue-100"
                   >
-                    <Sparkles size={14} className="mr-1.5" /> 
+                    <Sparkles size={14} className="mr-1.5" />
                     {isGeneratingLetter ? 'Writing...' : 'Generate with AI'}
                   </Button>
                 </div>
                 <textarea
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[200px] ${
-                    profile.coverLetter.length < 50 ? 'border-red-300' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[200px] ${profile.coverLetter.length < 50 ? 'border-red-300' : 'border-slate-300'
+                    }`}
                   placeholder="Dear Hiring Manager, I am excited to apply..."
                   value={profile.coverLetter || ''}
-                  onChange={e => setProfile({...profile, coverLetter: e.target.value})}
+                  onChange={e => setProfile({ ...profile, coverLetter: e.target.value })}
                 />
                 <div className="flex justify-between items-center mt-2">
                   <p className="text-xs text-slate-400">
@@ -1254,252 +1293,252 @@ function App() {
       <NavBar currentPage={currentPage} onNavigate={setCurrentPage} />
       {currentPage === 'home' ? (
         <div className="min-h-screen flex flex-col relative z-10"><header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="bg-blue-600 text-white p-1 sm:p-1.5 rounded-lg">
-                    <Briefcase size={18} className="sm:w-5 sm:h-5" />
-                  </div>
-                  <span className="font-bold text-lg sm:text-xl tracking-tight text-slate-900">HireLift</span>
-                </div>
-                <nav className="flex items-center gap-1 sm:gap-2">
-                  <button onClick={() => setCurrentPage('about')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">About</button>
-                  <button onClick={() => setCurrentPage('resume')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Resume</button>
-                  <button onClick={() => setCurrentPage('linkedin')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">LinkedIn</button>
-                  <button onClick={() => setCurrentPage('interaction')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Interview</button>
-                </nav>
-                <div className="flex items-center gap-2 sm:gap-4">
-                  <span className="text-xs sm:text-sm font-medium text-slate-600 hidden md:block">Welcome, {profile.name}</span>
-                  <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-lg hover:bg-slate-100">
-                    <LogOut size={18} className="sm:w-5 sm:h-5" />
-                  </button>
-                </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-blue-600 text-white p-1 sm:p-1.5 rounded-lg">
+                <Briefcase size={18} className="sm:w-5 sm:h-5" />
               </div>
-            </header>
+              <span className="font-bold text-lg sm:text-xl tracking-tight text-slate-900">HireLift</span>
+            </div>
+            <nav className="flex items-center gap-1 sm:gap-2">
+              <button onClick={() => setCurrentPage('about')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">About</button>
+              <button onClick={() => setCurrentPage('resume')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Resume</button>
+              <button onClick={() => setCurrentPage('linkedin')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">LinkedIn</button>
+              <button onClick={() => setCurrentPage('interaction')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">Interview</button>
+            </nav>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <span className="text-xs sm:text-sm font-medium text-slate-600 hidden md:block">Welcome, {profile.name}</span>
+              <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 transition-colors p-1 rounded-lg hover:bg-slate-100">
+                <LogOut size={18} className="sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+        </header>
 
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-              
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">                {/* Sidebar */}
-                <div className="lg:col-span-3 space-y-4 sm:space-y-6">
-                  <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl transition-all duration-300">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                        <User size={18} className="text-white" />
-                      </div>
-                      <h2 className="font-bold text-slate-900 text-sm sm:text-base">Your Profile</h2>
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">                {/* Sidebar */}
+              <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl transition-all duration-300">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                      <User size={18} className="text-white" />
                     </div>
-                    <div className="space-y-3 sm:space-y-4 text-sm">
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
-                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Role</p>
-                        <p className="text-sm font-medium text-slate-800">{profile.preferredRoles[0]}</p>
-                      </div>
-                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-3">
-                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Experience</p>
-                        <p className="text-sm font-medium text-slate-800">{profile.experience}</p>
-                      </div>
-                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3">
-                        <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Location / Mode</p>
-                        <p className="text-sm font-medium text-slate-800 truncate" title={profile.jobLocation.join(', ')}>
-                          {profile.jobLocation.length > 0 ? profile.jobLocation[0] : (profile.primaryWorkMode || 'Any')}
-                          {profile.jobLocation.length > 1 && ` +${profile.jobLocation.length - 1}`}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {profile.workModes.join(', ')}
-                          {profile.primaryWorkMode && <span className="text-blue-500"> ({profile.primaryWorkMode} Pref)</span>}
-                        </p>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setAppState(AppState.PROFILE)} 
-                        className="w-full text-xs sm:text-sm mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-                      >
-                        Edit Profile
-                      </Button>
-                    </div>
-                  </div>                  {/* n8n Automation Card */}
-                  <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-xl shadow-xl border-2 border-white/20 p-4 sm:p-6 text-white hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-                        <Workflow size={18} className="text-white" />
-                      </div>
-                      <h3 className="font-bold text-sm sm:text-base">Automate with n8n</h3>
-                    </div>
-                    <p className="text-xs text-white/90 mb-4 leading-relaxed">
-                      Download a workflow to automate applications on your own server.
-                    </p>
-                    <Button 
-                      onClick={handleDownloadN8n}
-                      className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0 hover:shadow-lg font-semibold"
-                    >
-                      <Download size={14} className="mr-2" />
-                      Download Workflow
-                    </Button>
+                    <h2 className="font-bold text-slate-900 text-sm sm:text-base">Your Profile</h2>
                   </div>
-
-                  {/* Workday Filler Card */}
-                  <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg">
-                        <FileCode size={18} className="text-white" />
-                      </div>
-                      <h3 className="font-bold text-slate-900 text-sm sm:text-base">Workday Filler</h3>
+                  <div className="space-y-3 sm:space-y-4 text-sm">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Role</p>
+                      <p className="text-sm font-medium text-slate-800">{profile.preferredRoles[0]}</p>
                     </div>
-                    <p className="text-xs text-slate-600 mb-4">
-                      Get a script to auto-fill Workday applications in console.
-                    </p>
-                    <Button 
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Experience</p>
+                      <p className="text-sm font-medium text-slate-800">{profile.experience}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Location / Mode</p>
+                      <p className="text-sm font-medium text-slate-800 truncate" title={profile.jobLocation.join(', ')}>
+                        {profile.jobLocation.length > 0 ? profile.jobLocation[0] : (profile.primaryWorkMode || 'Any')}
+                        {profile.jobLocation.length > 1 && ` +${profile.jobLocation.length - 1}`}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {profile.workModes.join(', ')}
+                        {profile.primaryWorkMode && <span className="text-blue-500"> ({profile.primaryWorkMode} Pref)</span>}
+                      </p>
+                    </div>
+                    <Button
                       variant="outline"
-                      onClick={handleDownloadWorkdayScript}
-                      className="w-full text-xs flex items-center gap-2 justify-center bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-0 hover:shadow-lg"
+                      onClick={() => setAppState(AppState.PROFILE)}
+                      className="w-full text-xs sm:text-sm mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                     >
-                      <Download size={12} /> Get Script
+                      Edit Profile
                     </Button>
                   </div>
-
-                  <Button 
-                    onClick={() => setAppState(AppState.APPLICATION_FORM)} 
-                    className="w-full justify-between group shadow-lg text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-purple-600 border-0 hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                    variant="outline"
+                </div>                  {/* n8n Automation Card */}
+                <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-xl shadow-xl border-2 border-white/20 p-4 sm:p-6 text-white hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                      <Workflow size={18} className="text-white" />
+                    </div>
+                    <h3 className="font-bold text-sm sm:text-base">Automate with n8n</h3>
+                  </div>
+                  <p className="text-xs text-white/90 mb-4 leading-relaxed">
+                    Download a workflow to automate applications on your own server.
+                  </p>
+                  <Button
+                    onClick={handleDownloadN8n}
+                    className="w-full text-xs bg-white text-indigo-900 hover:bg-indigo-50 border-0 hover:shadow-lg font-semibold"
                   >
-                    <span className="flex items-center gap-2">
-                      <FileText size={14} /> Edit Application
-                    </span>
-                    <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                    <Download size={14} className="mr-2" />
+                    Download Workflow
                   </Button>
-                </div>                <div className="lg:col-span-9">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
-                    <div>
-                      <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        Live Job Matches
-                      </h2>
-                      <p className="text-sm text-slate-600 mt-1">Real-time opportunities tailored for you</p>
-                    </div>
-                    <div className="text-xs sm:text-sm text-slate-700 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border-2 border-white/50 shadow-lg flex items-center gap-2 whitespace-nowrap font-semibold">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      {getFilteredJobs(matchedJobs).length} matches found
-                    </div>
-                  </div>
+                </div>
 
-                  {/* Job Filters */}
-                  <div className="mb-6">
-                    <JobFilterPanel 
-                      filters={jobFilters}
-                      onFilterChange={setJobFilters}
-                      resultCount={getFilteredJobs(matchedJobs).length}
-                    />
+                {/* Workday Filler Card */}
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border-2 border-white/50 p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg">
+                      <FileCode size={18} className="text-white" />
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">Workday Filler</h3>
                   </div>
+                  <p className="text-xs text-slate-600 mb-4">
+                    Get a script to auto-fill Workday applications in console.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadWorkdayScript}
+                    className="w-full text-xs flex items-center gap-2 justify-center bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-0 hover:shadow-lg"
+                  >
+                    <Download size={12} /> Get Script
+                  </Button>
+                </div>
 
-                  {/* Active Bot Overlay */}
-                  {activeBotJob && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                      <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full border border-slate-200 text-center animate-in zoom-in duration-300">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
-                            <Bot size={24} className="text-blue-600 relative z-10 sm:w-8 sm:h-8" />
-                            <div className="absolute inset-0 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin"></div>
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">AI Auto-Pilot Running</h3>
-                          <p className="text-xs sm:text-sm text-slate-500 mb-4">Please wait while we apply for you.</p>
-                          
-                          <div className="bg-slate-50 rounded-lg p-2 sm:p-3 text-xs sm:text-sm font-mono text-blue-700 border border-blue-100 flex items-center gap-2 justify-center">
-                            <Loader2 size={12} className="animate-spin sm:w-4 sm:h-4" />
-                            <span className="truncate">{botStep}</span>
-                          </div>
+                <Button
+                  onClick={() => setAppState(AppState.APPLICATION_FORM)}
+                  className="w-full justify-between group shadow-lg text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-purple-600 border-0 hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                  variant="outline"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileText size={14} /> Edit Application
+                  </span>
+                  <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </div>                <div className="lg:col-span-9">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Live Job Matches
+                    </h2>
+                    <p className="text-sm text-slate-600 mt-1">Real-time opportunities tailored for you</p>
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-700 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border-2 border-white/50 shadow-lg flex items-center gap-2 whitespace-nowrap font-semibold">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    {getFilteredJobs(matchedJobs).length} matches found
+                  </div>
+                </div>
+
+                {/* Job Filters */}
+                <div className="mb-6">
+                  <JobFilterPanel
+                    filters={jobFilters}
+                    onFilterChange={setJobFilters}
+                    resultCount={getFilteredJobs(matchedJobs).length}
+                  />
+                </div>
+
+                {/* Active Bot Overlay */}
+                {activeBotJob && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm w-full border border-slate-200 text-center animate-in zoom-in duration-300">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+                        <Bot size={24} className="text-blue-600 relative z-10 sm:w-8 sm:h-8" />
+                        <div className="absolute inset-0 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin"></div>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">AI Auto-Pilot Running</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 mb-4">Please wait while we apply for you.</p>
+
+                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3 text-xs sm:text-sm font-mono text-blue-700 border border-blue-100 flex items-center gap-2 justify-center">
+                        <Loader2 size={12} className="animate-spin sm:w-4 sm:h-4" />
+                        <span className="truncate">{botStep}</span>
                       </div>
                     </div>
-                  )}            <div className="space-y-4">
-                    {matchedJobs.length > 0 ? (
-                      getFilteredJobs(matchedJobs).length > 0 ? (
-                        getFilteredJobs(matchedJobs).map((job, index) => {
-                          const jobId = getJobId(job);
-                          return (
-                            <JobCard 
-                              key={index} 
-                              job={job} 
-                              onAutoApply={handleAutoApply}
-                              isApplying={applyingJobs.has(jobId)}
-                              isApplied={appliedJobs.has(jobId)}
-                            />
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
-                          <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
-                            <Search size={24} className="sm:w-8 sm:h-8" />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found with current filters</h3>
-                          <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>                    <Button 
-                            variant="outline" 
-                            onClick={() => setJobFilters({
-                              matchPercentage: 0,
-                              jobType: [],
-                              visaSponsorship: false,
-                              remote: false,
-                            })}
-                            className="mt-6 text-xs sm:text-sm"
-                          >
-                            Reset Filters
-                          </Button>
-                        </div>
-                      )
+                  </div>
+                )}            <div className="space-y-4">
+                  {matchedJobs.length > 0 ? (
+                    getFilteredJobs(matchedJobs).length > 0 ? (
+                      getFilteredJobs(matchedJobs).map((job, index) => {
+                        const jobId = getJobId(job);
+                        return (
+                          <JobCard
+                            key={index}
+                            job={job}
+                            onAutoApply={handleAutoApply}
+                            isApplying={applyingJobs.has(jobId)}
+                            isApplied={appliedJobs.has(jobId)}
+                          />
+                        );
+                      })
                     ) : (
                       <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
                         <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
                           <Search size={24} className="sm:w-8 sm:h-8" />
                         </div>
-                        <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found above 75%</h3>
-                        <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try updating your profile or broadening your location preferences.</p>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setAppState(AppState.PROFILE)} 
+                        <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found with current filters</h3>
+                        <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try adjusting your filters or update your profile.</p>                    <Button
+                          variant="outline"
+                          onClick={() => setJobFilters({
+                            matchPercentage: 0,
+                            jobType: [],
+                            visaSponsorship: false,
+                            remote: false,
+                          })}
                           className="mt-6 text-xs sm:text-sm"
                         >
-                          Update Profile
+                          Reset Filters
                         </Button>
                       </div>
-                    )}
-                  </div>
+                    )
+                  ) : (
+                    <div className="text-center py-12 sm:py-20 bg-white rounded-xl border border-slate-200 border-dashed">
+                      <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+                        <Search size={24} className="sm:w-8 sm:h-8" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-medium text-slate-900">No matches found above 75%</h3>
+                      <p className="text-slate-500 max-w-sm mx-auto mt-2 text-xs sm:text-sm">Try updating your profile or broadening your location preferences.</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => setAppState(AppState.PROFILE)}
+                        className="mt-6 text-xs sm:text-sm"
+                      >
+                        Update Profile
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
-            </main>
+            </div>
+          </main>
 
-            {/* Toast Notification */}
-            {toast && (
-              <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-2xl text-white transform transition-all duration-300 translate-y-0 z-50 flex items-center gap-2 text-xs sm:text-sm max-w-xs sm:max-w-sm ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-                {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                <span className="font-medium">{toast.message}</span>
-              </div>
-            )}
+          {/* Toast Notification */}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-2xl text-white transform transition-all duration-300 translate-y-0 z-50 flex items-center gap-2 text-xs sm:text-sm max-w-xs sm:max-w-sm ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+              {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              <span className="font-medium">{toast.message}</span>
+            </div>
+          )}
 
-            {/* AutoApplyProgressModal */}
-            <AutoApplyProgressModal
-              steps={progressSteps}
-              currentStep={progressStepIdx}
-              isOpen={progressOpen}
-              onClose={() => setProgressOpen(false)}
-              error={progressError}            />
-          </div>      ) : currentPage === 'about' ? (
-        <About 
-          userName={profile.name}
-          onNavigate={setCurrentPage}
-          onLogout={handleLogout}
-        />
-      ) : currentPage === 'resume' ? (
-        <ResumeBuild 
-          userName={profile.name}
-          onNavigate={setCurrentPage}
-          onLogout={handleLogout}
-        />
-      ) : currentPage === 'linkedin' ? (
-        <LinkedInOptimization 
-          userName={profile.name}
-          onNavigate={setCurrentPage}
-          onLogout={handleLogout}
-        />
-      ) : currentPage === 'interaction' ? (
-        <PersonalInteraction 
-          userName={profile.name}
-          onNavigate={setCurrentPage}
-          onLogout={handleLogout}
-        />      ) : null}
+          {/* AutoApplyProgressModal */}
+          <AutoApplyProgressModal
+            steps={progressSteps}
+            currentStep={progressStepIdx}
+            isOpen={progressOpen}
+            onClose={() => setProgressOpen(false)}
+            error={progressError} />
+        </div>) : currentPage === 'about' ? (
+          <About
+            userName={profile.name}
+            onNavigate={setCurrentPage}
+            onLogout={handleLogout}
+          />
+        ) : currentPage === 'resume' ? (
+          <ResumeBuild
+            userName={profile.name}
+            onNavigate={setCurrentPage}
+            onLogout={handleLogout}
+          />
+        ) : currentPage === 'linkedin' ? (
+          <LinkedInOptimization
+            userName={profile.name}
+            onNavigate={setCurrentPage}
+            onLogout={handleLogout}
+          />
+        ) : currentPage === 'interaction' ? (
+          <PersonalInteraction
+            userName={profile.name}
+            onNavigate={setCurrentPage}
+            onLogout={handleLogout}
+          />) : null}
 
       {/* Global Styles for Animations */}
       <style>{`
