@@ -13,6 +13,7 @@ import { sendApplicationConfirmationEmail, sendBatchApplicationEmail, sendWelcom
 import { fetchDailyJobs, scheduleDailyJobFetch, getSourceBadgeColor } from './services/jobScraperAgent';
 import { fetchRealJobs, searchRealJobs } from './services/realJobFetcher';
 import { fetchCompanyCareerJobs, searchCompanyCareerJobs } from './services/companyCareerPageFetcher';
+import { register, login } from './services/authService';
 import { Input, TextArea } from './components/Input';
 import FileUpload from './components/FileUpload';
 import Button from './components/Button';
@@ -74,11 +75,15 @@ function App() {
     jobType: [],
     visaSponsorship: false,
     remote: false,
-  });
-  const [progressSteps, setProgressSteps] = useState<string[]>([]);
+  });  const [progressSteps, setProgressSteps] = useState<string[]>([]);
   const [progressStepIdx, setProgressStepIdx] = useState<number>(0);
   const [progressOpen, setProgressOpen] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
+
+  // Temporary input states to fix backspace issue
+  const [skillsInput, setSkillsInput] = useState<string>('');
+  const [rolesInput, setRolesInput] = useState<string>('');
+  const [locationsInput, setLocationsInput] = useState<string>('');
 
   // Simple strong password generator
   const generateStrongPassword = () => {
@@ -122,32 +127,78 @@ function App() {
 
     setAuthErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const handleAuthSubmit = () => {
+  };  const handleAuthSubmit = async () => {
     if (!validateAuth()) {
       return;
     }
 
-    if (isRegisterMode) {
-      setProfile(prev => ({ ...prev, email: authEmail, name: authName }));
-      setAppState(AppState.PROFILE);
-      setShowAuthModal(false);
-      showToast('Account created successfully! Complete your profile.');
-    } else {
-      setProfile(prev => ({ ...prev, email: authEmail }));
-      setAppState(AppState.PROFILE);
-      setShowAuthModal(false);
-      showToast('Welcome back!');
-    }
+    try {
+      if (isRegisterMode) {
+        // Try to call register API
+        try {
+          const response = await register(authName, authEmail, authPassword);
+          
+          // Update profile with response data
+          setProfile(prev => ({ 
+            ...prev, 
+            email: response.user?.email || authEmail, 
+            name: response.user?.name || authName 
+          }));
+          
+          showToast('Account created successfully! Complete your profile.');
+        } catch (apiError) {
+          console.warn('Backend API not available, continuing with local auth:', apiError);
+          // Fallback: Continue without backend API
+          setProfile(prev => ({ 
+            ...prev, 
+            email: authEmail, 
+            name: authName 
+          }));
+          
+          showToast('Account created! (Demo mode - no backend connected)');
+        }
+        
+        setAppState(AppState.PROFILE);
+        setShowAuthModal(false);
+      } else {
+        // Try to call login API
+        try {
+          const response = await login(authEmail, authPassword);
+          
+          // Update profile with response data
+          setProfile(prev => ({ 
+            ...prev, 
+            email: response.user?.email || authEmail,
+            name: response.user?.name || prev.name
+          }));
+          
+          showToast('Welcome back!');
+        } catch (apiError) {
+          console.warn('Backend API not available, continuing with local auth:', apiError);
+          // Fallback: Continue without backend API
+          setProfile(prev => ({ 
+            ...prev, 
+            email: authEmail
+          }));
+          
+          showToast('Logged in! (Demo mode - no backend connected)');
+        }
+        
+        setAppState(AppState.PROFILE);
+        setShowAuthModal(false);
+      }
 
-    // Reset form
-    setAuthName('');
-    setAuthEmail('');
-    setAuthPassword('');
-    setAuthConfirmPassword('');
-    setSuggestedPassword('');
-    setAuthErrors({});
+      // Reset form
+      setAuthName('');
+      setAuthEmail('');
+      setAuthPassword('');
+      setAuthConfirmPassword('');
+      setSuggestedPassword('');
+      setAuthErrors({});
+    } catch (error: any) {
+      console.error('Auth error:', error);
+      showToast(error.message || 'Authentication failed. Please try again.', 'error');
+    }
   };
   // Compute a simple match score between a Job and the user's (or demo) profile
   const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
@@ -325,22 +376,10 @@ function App() {
     URL.revokeObjectURL(url);
     showToast("Workday Filler Script downloaded! Run this in Console (F12) on Workday sites.");
   };
-
-  const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAppState(AppState.APPLICATION_FORM);
-    window.scrollTo(0, 0);
-
-    // Automatically generate cover letter if it's the default or empty
-    const isDefault = profile.coverLetter.startsWith("To Hiring Manager") || !profile.coverLetter || profile.coverLetter.length < 50;
-    if (isDefault) {
-      handleGenerateCoverLetter();
-    }
-  };
-
-  const handleApplicationFormSubmit = async (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsMatching(true);
+    
     try {
       let results;
       try {
@@ -378,7 +417,7 @@ function App() {
             match_percentage,
             matched_skills,
             missing_skills,
-            auto_apply_eligible: !!j.is_verified, // internal verified jobs are auto-apply eligible
+            auto_apply_eligible: !!j.is_verified,
             apply_url: j.job_source?.startsWith('http') ? j.job_source : '#',
             job_source: j.job_source || 'Internal',
             reasoning,
@@ -402,14 +441,16 @@ function App() {
 
       setMatchedJobs(results.matched_jobs);
       setAppState(AppState.DASHBOARD);
-      showToast(`Real-time search complete! Found ${results.matched_jobs.length} jobs.`);
+      showToast(`Profile complete! Found ${results.matched_jobs.length} matching jobs.`);
+      window.scrollTo(0, 0);
     } catch (err) {
       console.error(err);
-      showToast("Failed to fetch real-time jobs. Please try again.", "error");
+      showToast("Failed to fetch jobs. Please try again.", "error");
     } finally {
       setIsMatching(false);
     }
   };
+  
   const getFilteredJobs = (jobs: MatchedJob[]): MatchedJob[] => {
     return jobs.filter(job => {
       // Match percentage filter
@@ -534,14 +575,6 @@ function App() {
     setAppliedJobs(new Set());
   };
 
-  const handleBackFromApplication = () => {
-    if (matchedJobs.length > 0) {
-      setAppState(AppState.DASHBOARD);
-    } else {
-      setAppState(AppState.PROFILE);
-    }
-  };
-
   const handleWorkModeToggle = (mode: string) => {
     setProfile(prev => {
       const newModes = prev.workModes.includes(mode)
@@ -567,8 +600,7 @@ function App() {
   // --- Landing Page Render ---
   if (appState === 'LANDING') {
     return (
-      <div className="min-h-screen relative bg-white overflow-hidden text-slate-900">
-        {/* Sticky Nav Bar - Responsive */}
+      <div className="min-h-screen relative bg-white overflow-hidden text-slate-900">        {/* Sticky Nav Bar - Responsive */}
         <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -576,10 +608,37 @@ function App() {
                 <Briefcase size={20} className="sm:w-6 sm:h-6" />
               </div>
               <span className="font-extrabold text-lg sm:text-2xl tracking-tight">HireLift</span>
-            </div>            <nav className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
+            </div>
+            
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+              <button className="flex items-center gap-2 text-blue-700 hover:text-blue-900 transition">
+                <Briefcase size={16} />
+                <span>Home</span>
+              </button>
+              <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                <FileText size={16} />
+                <span>About</span>
+              </button>
+              <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                <FileText size={16} />
+                <span>Resume Build</span>
+              </button>
+              <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                <User size={16} />
+                <span>LinkedIn</span>
+              </button>
+              <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                <User size={16} />
+                <span>Personal Interaction</span>
+              </button>
+            </nav>
+
+            {/* Auth Buttons */}
+            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
               <button onClick={() => setShowAuthModal(true)} className="text-blue-700 hover:text-blue-900 px-2 sm:px-3 py-1 rounded transition">Log in</button>
               <button onClick={() => { setShowAuthModal(true); setIsRegisterMode(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow text-xs sm:text-sm">Create</button>
-            </nav>
+            </div>
           </div>
         </header>
         {/* Animated Job/Professional Bubbles */}
@@ -615,7 +674,27 @@ function App() {
           </div>
         </div>        <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-16 flex flex-col items-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-center mb-2 sm:mb-4 leading-tight tracking-tight">Find Your Next <span className="text-blue-600">Dream Job</span> Instantly</h1>
-          <p className="text-base sm:text-lg text-slate-500 text-center mb-6 sm:mb-8 max-w-2xl px-2">AI-powered job search that matches your resume, skills, and experience to the best roles. No more noise—just real opportunities from official career pages.</p><div className="w-full max-w-5xl px-2">
+          <p className="text-base sm:text-lg text-slate-500 text-center mb-6 sm:mb-8 max-w-2xl px-2">AI-powered job search that matches your resume, skills, and experience to the best roles. No more noise—just real opportunities from official career pages.</p>
+
+          {/* Create Account CTA - Under Hero Section */}
+          <div className="mb-8 text-center">
+            <button
+              onClick={() => {
+                setShowAuthModal(true);
+                setIsRegisterMode(true);
+              }}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+            >
+              <UserPlus className="w-5 h-5" />
+              Create Account to Apply
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <p className="text-sm text-slate-500 mt-3">
+              🚀 Join 10,000+ job seekers finding their dream jobs with AI
+            </p>
+          </div>
+
+          <div className="w-full max-w-5xl px-2">
             {/* Hidden header - AI agent still works in background */}
 
             {isLoadingJobs ? (
@@ -731,31 +810,10 @@ function App() {
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 transform -skew-x-12 group-hover:translate-x-full transition-all duration-700"></div>
                     </button>
                   );
-                })}
-              </div>
-            )}
-
-            {/* View All Jobs CTA */}
-            {dailyAIJobs.length > 0 && (
-              <div className="mt-8 text-center">
-                <button
-                  onClick={() => {
-                    setShowAuthModal(true);
-                    setIsRegisterMode(true);
-                  }}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-                >
-                  <UserPlus className="w-5 h-5" />
-                  Create Account to Apply
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-                <p className="text-sm text-slate-500 mt-3">
-                  🚀 Join 10,000+ job seekers finding their dream jobs with AI
-                </p>
-              </div>
+                })}              </div>
             )}
           </div>
-        </main>        {/* Auth Modal - Beautiful Design with Animated Bubbles */}
+        </main>{/* Auth Modal - Beautiful Design with Animated Bubbles */}
         {showAuthModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl w-full max-w-md shadow-2xl border border-white/20 relative overflow-hidden">
@@ -764,9 +822,7 @@ function App() {
                 <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-400/30 to-purple-400/30 rounded-full blur-3xl animate-blob"></div>
                 <div className="absolute top-20 -left-20 w-40 h-40 bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
                 <div className="absolute -bottom-20 left-1/2 w-40 h-40 bg-gradient-to-br from-cyan-400/30 to-blue-400/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
-              </div>
-
-              <div className="relative z-10 p-8">
+              </div>              <div className="relative z-10 p-8">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -783,6 +839,7 @@ function App() {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowAuthModal(false);
                       setAuthErrors({});
@@ -801,7 +858,7 @@ function App() {
                 </div>
 
                 {/* Form */}
-                <div className="space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleAuthSubmit(); }} className="space-y-4">
                   {/* Name field - only for registration */}
                   {isRegisterMode && (
                     <div>
@@ -853,9 +910,7 @@ function App() {
                         {authErrors.email}
                       </p>
                     )}
-                  </div>
-
-                  {/* Password field */}
+                  </div>                  {/* Password field */}
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
                     <div className="relative">
@@ -869,30 +924,15 @@ function App() {
                           setAuthErrors(prev => ({ ...prev, password: undefined }));
                         }}
                         type="password"
-                        className={`w-full pl-11 pr-24 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.password ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
+                        className={`w-full pl-11 pr-4 py-3 bg-white/80 backdrop-blur-sm border-2 ${authErrors.password ? 'border-red-300' : 'border-white/50'} rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all`}
                         placeholder="Enter password"
                       />
-                      {isRegisterMode && (
-                        <button
-                          type="button"
-                          onClick={handleSuggestPassword}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-3 py-1.5 rounded-lg hover:shadow-lg transition-all font-semibold"
-                        >
-                          Generate
-                        </button>
-                      )}
                     </div>
                     {authErrors.password && (
                       <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         {authErrors.password}
                       </p>
-                    )}
-                    {isRegisterMode && suggestedPassword && (
-                      <div className="mt-2 text-xs bg-green-50 border border-green-200 text-green-700 p-2 rounded-lg flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="font-medium">Strong password generated!</span>
-                      </div>
                     )}
                   </div>
 
@@ -926,13 +966,13 @@ function App() {
                           {authErrors.confirmPassword}
                         </p>
                       )}
-                    </div>
-                  )}
-                </div>
+                    </div>                  )}
+                </form>
 
                 {/* Action Buttons */}
                 <div className="mt-6 space-y-3">
                   <button
+                    type="submit"
                     onClick={handleAuthSubmit}
                     className={`w-full bg-gradient-to-r ${isRegisterMode ? 'from-purple-600 to-pink-600' : 'from-blue-600 to-cyan-600'} text-white px-6 py-3 rounded-xl font-semibold text-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2`}
                   >
@@ -950,6 +990,7 @@ function App() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setIsRegisterMode(!isRegisterMode);
                       setAuthErrors({});
@@ -1004,9 +1045,19 @@ function App() {
         </div>
       </div>
     );
-  }
-  /* --- PROFILE SETUP (Step 1) --- */
+  }  /* --- PROFILE SETUP (Step 1) --- */
   if (appState === AppState.PROFILE) {
+    // Initialize temporary input states if empty
+    if (!skillsInput && profile.skills.length > 0) {
+      setSkillsInput(profile.skills.join(', '));
+    }
+    if (!rolesInput && profile.preferredRoles.length > 0) {
+      setRolesInput(profile.preferredRoles.join(', '));
+    }
+    if (!locationsInput && profile.jobLocation.length > 0) {
+      setLocationsInput(profile.jobLocation.join(', '));
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden py-8 sm:py-12 px-4 sm:px-6">
         {/* Animated background blobs */}
@@ -1020,10 +1071,8 @@ function App() {
           <div className="mb-6 sm:mb-8 text-center">
             <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full mb-4">
               <User className="w-8 h-8 text-white" />
-            </div>
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-emerald-600 mb-3">
-              <span className="bg-emerald-100 px-3 py-1 rounded-full">Step 1 of 2</span>
-              <span>User Details</span>
+            </div>            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-emerald-600 mb-3">
+              <span className="bg-emerald-100 px-3 py-1 rounded-full">Complete Your Profile</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent mb-3">
               Build Your Profile
@@ -1050,20 +1099,42 @@ function App() {
                   placeholder="e.g. 4 years"
                   className="text-sm"
                 />
-              </div>
-
-              <Input
+              </div>              <Input
                 label="Preferred Roles (Comma separated)"
-                value={profile.preferredRoles.join(', ')}
-                onChange={e => setProfile({ ...profile, preferredRoles: e.target.value.split(',').map(s => s.trim()) })}
+                value={rolesInput}
+                onChange={e => {
+                  const newValue = e.target.value;
+                  setRolesInput(newValue);
+                  // Update profile with parsed array
+                  const rolesArray = newValue
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+                  // Update profile - allow empty arrays if user clears the field
+                  setProfile(prev => ({ 
+                    ...prev, 
+                    preferredRoles: rolesArray 
+                  }));
+                }}
                 placeholder="e.g. Frontend Developer, UI Engineer"
                 className="text-sm"
-              />
-
-              <Input
+              />              <Input
                 label="Skills (Comma separated)"
-                value={profile.skills.join(', ')}
-                onChange={e => setProfile({ ...profile, skills: e.target.value.split(',').map(s => s.trim()) })}
+                value={skillsInput}
+                onChange={e => {
+                  const newValue = e.target.value;
+                  setSkillsInput(newValue);
+                  // Update profile with parsed array
+                  const skillsArray = newValue
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+                  // Update profile - allow empty arrays if user clears the field
+                  setProfile(prev => ({ 
+                    ...prev, 
+                    skills: skillsArray 
+                  }));
+                }}
                 placeholder="e.g. React, Node.js, Python"
                 className="text-sm"
               />
@@ -1109,169 +1180,60 @@ function App() {
                     })}
                   </div>
                   {profile.workModes.length === 0 && <p className="text-xs text-red-400 mt-1">Please select at least one work mode.</p>}
-                </div>
-
-                {/* Specific Locations */}
+                </div>                {/* Specific Locations */}
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Specific Cities / Countries (Optional)</label>
                   <div className="relative">
                     <Globe size={14} className="absolute left-3 top-3 text-slate-400" />
                     <input
                       className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                      value={profile.jobLocation.join(', ')}
-                      onChange={e => setProfile({ ...profile, jobLocation: e.target.value.split(',').map(s => s.trim()) })}
+                      value={locationsInput || profile.jobLocation.join(', ')}
+                      onChange={e => {
+                        const newValue = e.target.value;
+                        setLocationsInput(newValue);
+                        // Update profile with parsed array
+                        const locationsArray = newValue
+                          .split(',')
+                          .map(s => s.trim())
+                          .filter(s => s.length > 0);
+                        setProfile(prev => ({ ...prev, jobLocation: locationsArray }));
+                      }}
                       placeholder="e.g. New York, London, Berlin"
                     />
                   </div>              </div>
-              </div>
-
-              <FileUpload
+              </div>              <FileUpload
                 label="Upload Resume (PDF, DOC, DOCX or TXT)"
                 onFileSelect={setResumeFile}
                 onTextExtract={(text) => {
-                  // Auto-extract text if user uploads a text file
+                  // Auto-fill resume text field when file is uploaded and professional summary is generated
                   if (text && text.length > 20) {
-                    setProfile({ ...profile, resumeText: text });
+                    setProfile(prev => ({ ...prev, resumeText: text }));
+                    showToast(`✅ Professional summary generated from your resume!`);
+                  } else {
+                    showToast('Resume uploaded but text extraction incomplete. Please write manually.', 'error');
                   }
                 }}
               />
 
               <TextArea
-                label="Resume Text (Paste content or upload above)"
+                label="Professional Summary (Auto-generated from resume)"
                 value={profile.resumeText}
                 onChange={e => setProfile({ ...profile, resumeText: e.target.value })}
                 className="font-mono text-xs sm:text-sm"
-                placeholder="Paste the text content of your resume here..."
-              />
-              <div className="pt-4 border-t border-slate-100 flex justify-end">
-                <Button type="submit" className="w-full sm:w-auto px-8 text-sm">
-                  Next: Application Details <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  /* --- APPLICATION FORM (Step 2) --- */
-  if (appState === AppState.APPLICATION_FORM) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 relative overflow-hidden py-12 px-4">
-        {/* Animated background blobs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -left-40 w-80 h-80 bg-gradient-to-br from-violet-400/20 to-purple-400/20 rounded-full blur-3xl animate-blob"></div>
-          <div className="absolute top-60 -right-40 w-80 h-80 bg-gradient-to-br from-fuchsia-400/20 to-pink-400/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-          <div className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-purple-400/20 to-violet-400/20 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
-        </div>
-
-        <div className="max-w-3xl mx-auto relative z-10">
-          <Button
-            variant="ghost"
-            onClick={handleBackFromApplication}
-            className="mb-6 pl-0 hover:bg-transparent hover:text-violet-600 text-slate-700"
-          >
-            <ArrowLeft size={20} className="mr-2" /> Back
-          </Button>
-
-          <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-white" />
-            </div>
-            <div className="flex items-center justify-center gap-2 text-sm font-semibold text-violet-600 mb-3">
-              <span className="bg-violet-100 px-3 py-1 rounded-full">Step 2 of 2</span>
-              <span>Application Form</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent mb-3">
-              Application Template
-            </h1>
-            <p className="text-slate-700 mt-1 text-base max-w-2xl mx-auto">
-              Configure your auto-apply settings and cover letter template
-            </p>
-          </div>
-
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-white/50 overflow-hidden">
-            <div className="h-2 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500"></div>
-            <form onSubmit={handleApplicationFormSubmit} className="p-8 space-y-6">
-
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                <h3 className="font-semibold text-blue-900 mb-1">Email Configuration</h3>
-                <p className="text-sm text-blue-700 mb-4">Applications will be sent from this email address using your default mail client.</p>
-                <Input
-                  label="Your Email"
-                  type="email"
-                  value={profile.email}
-                  onChange={e => setProfile({ ...profile, email: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="LinkedIn URL"
-                  placeholder="https://linkedin.com/in/..."
-                  value={profile.linkedin || ''}
-                  onChange={e => setProfile({ ...profile, linkedin: e.target.value })}
-                />
-                <Input
-                  label="Portfolio / GitHub URL"
-                  placeholder="https://github.com/..."
-                  value={profile.portfolio || ''}
-                  onChange={e => setProfile({ ...profile, portfolio: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Availability"
-                  placeholder="e.g. 2 weeks notice, Immediate"
-                  value={profile.availability || ''}
-                  onChange={e => setProfile({ ...profile, availability: e.target.value })}
-                />
-                <Input
-                  label="Salary Expectation"
-                  placeholder="e.g. $90k - $110k"
-                  value={profile.salaryExpectation || ''}
-                  onChange={e => setProfile({ ...profile, salaryExpectation: e.target.value })}
-                />
-              </div>              <div className="relative">
-                <div className="flex justify-between items-end mb-1.5">
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">Cover Letter (Template)</label>
-                    <p className="text-xs text-slate-500 mt-0.5">Customized for each application</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={handleGenerateCoverLetter}
-                    isLoading={isGeneratingLetter}
-                    className="text-xs h-8 px-2 text-blue-600 bg-blue-50 hover:bg-blue-100"
-                  >
-                    <Sparkles size={14} className="mr-1.5" />
-                    {isGeneratingLetter ? 'Writing...' : 'Generate with AI'}
-                  </Button>
-                </div>
-                <textarea
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[200px] ${profile.coverLetter.length < 50 ? 'border-red-300' : 'border-slate-300'
-                    }`}
-                  placeholder="Dear Hiring Manager, I am excited to apply..."
-                  value={profile.coverLetter || ''}
-                  onChange={e => setProfile({ ...profile, coverLetter: e.target.value })}
-                />
-                <div className="flex justify-between items-center mt-2">
-                  <p className="text-xs text-slate-400">
-                    {profile.coverLetter.length < 50 && <span className="text-red-500">⚠️ Too short (min 50 chars)</span>}
-                    {profile.coverLetter.length >= 50 && <span className="text-green-600">✓ Ready</span>}
-                  </p>
-                  <p className="text-xs text-slate-400">{profile.coverLetter.length} / 1000 characters</p>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-4">
-                <Button type="submit" isLoading={isMatching} className="px-8 w-full md:w-auto">
-                  {matchedJobs.length > 0 ? (
-                    <span className="flex items-center gap-2"><Save size={18} /> Update & Find Real Jobs</span>
+                placeholder="Upload your resume above to auto-generate a professional summary like: 'Experienced Frontend Developer with 3 years of experience specializing in React, TypeScript, and Tailwind...'"
+              /><div className="pt-4 border-t border-slate-100 flex justify-end">
+                <Button type="submit" isLoading={isMatching} className="w-full sm:w-auto px-8 text-sm">
+                  {isMatching ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Searching Jobs...
+                    </span>
                   ) : (
-                    <span className="flex items-center gap-2">Search Live Jobs <ChevronRight size={18} /></span>
+                    <span className="flex items-center gap-2">
+                      <Search size={16} />
+                      Search Live Jobs
+                      <ChevronRight size={16} />
+                    </span>
                   )}
                 </Button>
               </div>
@@ -1280,7 +1242,7 @@ function App() {
         </div>
       </div>
     );
-  }  /* --- DASHBOARD --- */
+  }/* --- DASHBOARD --- */
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative">
       {/* Animated background blobs for dashboard */}
@@ -1384,8 +1346,7 @@ function App() {
                   </div>
                   <p className="text-xs text-slate-600 mb-4">
                     Get a script to auto-fill Workday applications in console.
-                  </p>
-                  <Button
+                  </p>                  <Button
                     variant="outline"
                     onClick={handleDownloadWorkdayScript}
                     className="w-full text-xs flex items-center gap-2 justify-center bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-0 hover:shadow-lg"
@@ -1393,18 +1354,10 @@ function App() {
                     <Download size={12} /> Get Script
                   </Button>
                 </div>
+              </div>
 
-                <Button
-                  onClick={() => setAppState(AppState.APPLICATION_FORM)}
-                  className="w-full justify-between group shadow-lg text-xs sm:text-sm bg-gradient-to-r from-violet-600 to-purple-600 border-0 hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                  variant="outline"
-                >
-                  <span className="flex items-center gap-2">
-                    <FileText size={14} /> Edit Application
-                  </span>
-                  <ChevronRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </div>                <div className="lg:col-span-9">
+              {/* Main Content Area */}
+              <div className="lg:col-span-9">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3 sm:gap-4">
                   <div>
                     <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
