@@ -1,24 +1,62 @@
-// Authentication API Service
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Authentication API Service with JWT Token Interceptor
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
-// Helper function for API calls with auth
-async function authApiCall(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_BASE_URL}/auth${endpoint}`;
+// Token management
+const TOKEN_KEY = 'jwt_token';
+const USER_KEY = 'user_data';
 
-  // Get token from localStorage
-  const token = localStorage.getItem('token');
+// Get token from localStorage
+const getStoredToken = (): string | null => {
+  return localStorage.getItem(TOKEN_KEY);
+};
 
-  const defaultOptions: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-    },
+// Save token to localStorage
+const saveToken = (token: string): void => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+// Save user data to localStorage
+const saveUser = (user: any): void => {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+
+// Remove token from localStorage
+const removeToken = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+};
+
+// API Interceptor - Automatically adds JWT token to requests
+async function apiRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = getStoredToken();
+
+  // Merge headers with authorization token
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  // Add Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const requestOptions: RequestInit = {
     ...options,
+    headers,
   };
 
   try {
-    const response = await fetch(url, defaultOptions);
+    const response = await fetch(url, requestOptions);
     const data = await response.json();
+
+    // Handle unauthorized - token expired or invalid
+    if (response.status === 401) {
+      removeToken();
+      throw new Error('Session expired. Please login again.');
+    }
 
     if (!response.ok) {
       throw new Error(data.error || data.message || `HTTP ${response.status}`);
@@ -26,22 +64,24 @@ async function authApiCall(endpoint: string, options: RequestInit = {}) {
 
     return data;
   } catch (error: any) {
-    console.error('Auth API call error:', error);
+    console.error('API Request Error:', error);
     throw error;
   }
 }
 
 // Register new user
 export async function register(name: string, email: string, password: string) {
-  const response = await authApiCall('/register', {
+  const response = await apiRequest('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ name, email, password }),
   });
 
-  // Save token to localStorage
+  // Save token and user data to localStorage
   if (response.token) {
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('user', JSON.stringify(response.user));
+    saveToken(response.token);
+  }
+  if (response.user) {
+    saveUser(response.user);
   }
 
   return response;
@@ -49,44 +89,46 @@ export async function register(name: string, email: string, password: string) {
 
 // Login user
 export async function login(email: string, password: string) {
-  const response = await authApiCall('/login', {
+  const response = await apiRequest('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
 
-  // Save token to localStorage
+  // Save token and user data to localStorage
   if (response.token) {
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('user', JSON.stringify(response.user));
+    saveToken(response.token);
+  }
+  if (response.user) {
+    saveUser(response.user);
   }
 
   return response;
 }
 
-// Get current user
+// Get current user (Protected - requires JWT token)
 export async function getCurrentUser() {
-  const response = await authApiCall('/me', {
+  const response = await apiRequest('/auth/me', {
     method: 'GET',
   });
 
   // Update user in localStorage
   if (response.user) {
-    localStorage.setItem('user', JSON.stringify(response.user));
+    saveUser(response.user);
   }
 
   return response;
 }
 
-// Update user profile
+// Update user profile (Protected - requires JWT token)
 export async function updateUserProfile(name?: string, profile?: any) {
-  const response = await authApiCall('/profile', {
+  const response = await apiRequest('/auth/profile', {
     method: 'PUT',
     body: JSON.stringify({ name, profile }),
   });
 
   // Update user in localStorage
   if (response.user) {
-    localStorage.setItem('user', JSON.stringify(response.user));
+    saveUser(response.user);
   }
 
   return response;
@@ -95,27 +137,27 @@ export async function updateUserProfile(name?: string, profile?: any) {
 // Logout user
 export async function logout() {
   try {
-    await authApiCall('/logout', {
+    await apiRequest('/auth/logout', {
       method: 'POST',
     });
   } catch (error) {
     // Continue with logout even if API call fails
+    console.error('Logout API error:', error);
   } finally {
     // Clear localStorage
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    removeToken();
   }
 }
 
 // Check if user is authenticated
 export function isAuthenticated(): boolean {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken();
   return !!token;
 }
 
 // Get stored user
 export function getStoredUser() {
-  const userStr = localStorage.getItem('user');
+  const userStr = localStorage.getItem(USER_KEY);
   if (userStr) {
     try {
       return JSON.parse(userStr);
@@ -128,7 +170,7 @@ export function getStoredUser() {
 
 // Get token
 export function getToken(): string | null {
-  return localStorage.getItem('token');
+  return getStoredToken();
 }
 
 // Export API base URL for direct access if needed

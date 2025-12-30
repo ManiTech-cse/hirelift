@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Gemini API Key</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error {
+            border-left-color: #f44336 !important;
+            background: #ffebee !important;
+        }
+        .loading {
+            color: #666;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔑 Test Gemini API Key</h1>
+        <p>This page tests if your Google Gemini API key is valid and working.</p>
+        
+        <label for="apiKey">API Key:</label>
+        <input 
+            type="text" 
+            id="apiKey" 
+            value="AIzaSyCTcNqL5eZzE-YKMl62QgvHDaNw-NxdIzA"
+            placeholder="Enter your Gemini API key"
+        >
+        
+        <button onclick="testAPI()">Test API Key</button>
+        <button onclick="getNewKey()">Get New API Key</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
+
+        window.testAPI = async function() {
+            const resultDiv = document.getElementById('result');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            
+            if (!apiKey) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = '❌ Please enter an API key';
+                return;
+            }
+            
+            resultDiv.className = 'loading';
+            resultDiv.textContent = '⏳ Testing API key...';
+            
+            try {
+                console.log('Testing API key:', apiKey.substring(0, 10) + '...');
+                
+                const ai = new GoogleGenAI({ apiKey: apiKey });
+                
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.0-flash-exp",
+                    contents: [{ 
+                        role: "user", 
+                        parts: [{ text: "Say 'API key is working!' in one sentence." }] 
+                    }],
+                    config: {
+                        temperature: 0.2,
+                    },
+                });
+                
+                const responseText = response.text || '';
+                
+                resultDiv.className = '';
+                resultDiv.textContent = 
+                    '✅ SUCCESS! API Key is VALID and WORKING!\n\n' +
+                    'Model: gemini-2.0-flash-exp\n' +
+                    'Response: ' + responseText + '\n\n' +
+                    '💡 Your API key is working correctly. The resume extraction should work now.';
+                
+                console.log('✅ API test successful:', responseText);
+                
+            } catch (error) {
+                console.error('❌ API test failed:', error);
+                
+                resultDiv.className = 'error';
+                
+                let errorMessage = '❌ API KEY TEST FAILED!\n\n';
+                errorMessage += 'Error: ' + error.message + '\n\n';
+                
+                if (error.message.includes('API key') || 
+                    error.message.includes('invalid') || 
+                    error.message.includes('expired') ||
+                    error.message.includes('401') ||
+                    error.message.includes('403')) {
+                    errorMessage += '🔑 API KEY ISSUE DETECTED!\n\n';
+                    errorMessage += 'Your API key is either:\n';
+                    errorMessage += '• Expired\n';
+                    errorMessage += '• Invalid\n';
+                    errorMessage += '• Not enabled for Gemini API\n\n';
+                    errorMessage += '👉 Click "Get New API Key" button to create a new one.';
+                } else if (error.message.includes('model')) {
+                    errorMessage += '📦 Model not available or not enabled.\n';
+                    errorMessage += 'Try enabling the Gemini API in Google Cloud Console.';
+                } else {
+                    errorMessage += 'Full error:\n' + JSON.stringify(error, null, 2);
+                }
+                
+                resultDiv.textContent = errorMessage;
+            }
+        };
+
+        window.getNewKey = function() {
+            window.open('https://aistudio.google.com/app/apikey', '_blank');
+            alert('📌 INSTRUCTIONS:\n\n' +
+                  '1. Click "Create API key" on the opened page\n' +
+                  '2. Copy the new API key\n' +
+                  '3. Paste it in the input field above\n' +
+                  '4. Click "Test API Key" to verify\n' +
+                  '5. Update the key in your code:\n' +
+                  '   • services/resumeExtractor.ts (line 4)\n' +
+                  '   • services/geminiService.ts (line 6)');
+        };
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('Auto-testing API key...');
+                testAPI();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
