@@ -198,8 +198,8 @@ function App() {
     } catch (error: any) {
       console.error('Auth error:', error);
       showToast(error.message || 'Authentication failed. Please try again.', 'error');
-    }
-  };
+    }  };
+
   // Compute a simple match score between a Job and the user's (or demo) profile
   const computeMatchScore = (job: Job, profileForCalc: UserProfile) => {
     // Handle both old format (required_skills) and new format (skills)
@@ -210,6 +210,18 @@ function App() {
 
     // Base skill score: 40% base + up to 50% for actual matches
     const skillScore = 40 + Math.round(skillPercentage * 50);
+
+    // Role match bonus: up to 15% if job title matches any preferred role
+    let roleBonus = 0;
+    const jobTitle = (job.job_title || '').toLowerCase();
+    const matchesRole = profileForCalc.preferredRoles.some(role => {
+      const roleLower = role.toLowerCase();
+      // Check if job title contains the role or vice versa
+      return jobTitle.includes(roleLower) || roleLower.includes(jobTitle);
+    });
+    if (matchesRole) {
+      roleBonus = 15;
+    }
 
     // Experience bonus: up to 20%
     let expBonus = 0;
@@ -226,12 +238,12 @@ function App() {
     // Random diversity boost: up to 10%
     const randomBoost = Math.floor(Math.random() * 11);
 
-    // Total: base 40 + skills up to 50 + exp up to 20 + random up to 10 = 40-120
-    const total = Math.min(99, skillScore + expBonus + randomBoost);
+    // Total: base 40 + skills up to 50 + role up to 15 + exp up to 20 + random up to 10 = 40-135
+    const total = Math.min(99, skillScore + roleBonus + expBonus + randomBoost);
 
     // Ensure minimum 50% for any profile with jobs in database
     return Math.max(50, total);
-  }; const handleLandingJobClick = (job: Job) => {
+  };const handleLandingJobClick = (job: Job) => {
     setLandingSelectedJob(job);
     // If user already inside application flow, let them continue; otherwise require auth
     if (appState === 'LANDING') {
@@ -1115,31 +1127,9 @@ function App() {
                     preferredRoles: rolesArray 
                   }));
                 }}
-                onKeyDown={e => {
-                  // Allow Backspace to delete the last role when cursor is at the end
-                  if (e.key === 'Backspace' && rolesInput.endsWith(', ') && e.currentTarget.selectionStart === rolesInput.length) {
-                    e.preventDefault();
-                    // Remove the last comma and space
-                    const newValue = rolesInput.slice(0, -2);
-                    setRolesInput(newValue);
-                    const rolesArray = newValue
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(s => s.length > 0);
-                    setProfile(prev => ({ 
-                      ...prev, 
-                      preferredRoles: rolesArray 
-                    }));
-                  }
-                  // Allow Delete key to work normally
-                  else if (e.key === 'Delete') {
-                    // Let browser handle Delete naturally
-                    return;
-                  }
-                }}
                 placeholder="e.g. Frontend Developer, UI Engineer"
                 className="text-sm"
-              /><Input
+              />              <Input
                 label="Skills (Comma separated)"
                 value={skillsInput}
                 onChange={e => {
@@ -1155,28 +1145,6 @@ function App() {
                     ...prev, 
                     skills: skillsArray 
                   }));
-                }}
-                onKeyDown={e => {
-                  // Allow Backspace to delete the last skill when cursor is at the end
-                  if (e.key === 'Backspace' && skillsInput.endsWith(', ') && e.currentTarget.selectionStart === skillsInput.length) {
-                    e.preventDefault();
-                    // Remove the last comma and space
-                    const newValue = skillsInput.slice(0, -2);
-                    setSkillsInput(newValue);
-                    const skillsArray = newValue
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(s => s.length > 0);
-                    setProfile(prev => ({ 
-                      ...prev, 
-                      skills: skillsArray 
-                    }));
-                  }
-                  // Allow Delete key to work normally
-                  else if (e.key === 'Delete') {
-                    // Let browser handle Delete naturally
-                    return;
-                  }
                 }}
                 placeholder="e.g. React, Node.js, Python"
                 className="text-sm"
@@ -1332,11 +1300,14 @@ function App() {
                       <User size={18} className="text-white" />
                     </div>
                     <h2 className="font-bold text-slate-900 text-sm sm:text-base">Your Profile</h2>
-                  </div>
-                  <div className="space-y-3 sm:space-y-4 text-sm">
+                  </div>                  <div className="space-y-3 sm:space-y-4 text-sm">
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
                       <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Role</p>
-                      <p className="text-sm font-medium text-slate-800">{profile.preferredRoles[0]}</p>
+                      <p className="text-sm font-medium text-slate-800">
+                        {profile.preferredRoles.length > 0 
+                          ? profile.preferredRoles.join(', ') 
+                          : 'Not specified'}
+                      </p>
                     </div>
                     <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-3">
                       <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Experience</p>

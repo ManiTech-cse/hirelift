@@ -18,13 +18,11 @@ export const matchJobsWithProfile = async (
       skills: j.required_skills,
       desc: j.description,
       is_verified: j.is_verified
-    })));
-
-    const prompt = `
+    })));    const prompt = `
       I need you to act as a ruthless Job Matcher and Recruiter.
       
       USER PROFILE:
-      - Roles: ${profile.preferredRoles.join(", ")}
+      - Preferred Roles: ${profile.preferredRoles.join(", ")}
       - Skills: ${JSON.stringify(profile.skills)}
       - Experience Level: ${profile.experience}
       - Target Cities: ${profile.jobLocation.join(", ")}
@@ -38,7 +36,11 @@ export const matchJobsWithProfile = async (
       Combine the INTERNAL DATABASE JOBS with the Google Search results.
       
       CRITICAL SEARCH INSTRUCTION:
-      - You MUST specifically search for open positions at the companies listed in the Internal Database on the following platforms:
+      - The user has specified MULTIPLE PREFERRED ROLES: ${profile.preferredRoles.join(", ")}
+      - You MUST search for jobs matching EACH role separately. For example:
+        ${profile.preferredRoles.map(role => `  • Search for "${role}" jobs`).join('\n        ')}
+      - Include jobs for ALL preferred roles, not just one
+      - Search on these platforms:
         1. LinkedIn
         2. Naukri.com
         3. Superset (joinSuperset)
@@ -47,15 +49,18 @@ export const matchJobsWithProfile = async (
 
       STEP 2: CALCULATE MATCH SCORE:
       For every job found, perform this calculation:
-      1. List ALL required skills mentioned in the job title and description.
-      2. Compare with User Skills list above.
-      3. Formula: Score = (Number of Matching Skills / Total Required Skills) * 100.
+      1. Check if job title matches ANY of the user's preferred roles: ${profile.preferredRoles.join(", ")}
+      2. List ALL required skills mentioned in the job title and description
+      3. Compare with User Skills list above
+      4. Formula: Score = (Number of Matching Skills / Total Required Skills) * 100
+      5. Add 10% bonus if job title matches one of the preferred roles
       
       STEP 3: Filter and Return JSON.
-      - INTERNAL DATABASE JOBS: ALWAYS INCLUDE at least 5-10 jobs from the provided list that are somewhat relevant to the user's role (e.g. if user is Frontend, show Frontend/Fullstack/Software Engineer roles). 
-      - **CRITICAL**: For Internal Database jobs, ALLOW scores as low as 20% to ensure they appear in the UI. 
-      - **CRITICAL**: For Internal Database jobs, ALWAYS set "auto_apply_eligible": true.
-      - GOOGLE SEARCH JOBS: Only include if Match Score > 60%.
+      - INTERNAL DATABASE JOBS: ALWAYS INCLUDE at least 5-10 jobs from the provided list that match ANY of the user's preferred roles
+      - **CRITICAL**: For Internal Database jobs, ALLOW scores as low as 20% to ensure they appear in the UI
+      - **CRITICAL**: For Internal Database jobs, ALWAYS set "auto_apply_eligible": true
+      - GOOGLE SEARCH JOBS: Include jobs for ALL preferred roles if Match Score > 60%
+      - BALANCE: Try to return a mix of jobs across all preferred roles (e.g., if user wants Frontend and Backend, show both types)
       
       Structure:
       {
@@ -77,6 +82,7 @@ export const matchJobsWithProfile = async (
 
       IMPORTANT: 
       - Return ONLY the JSON string. No markdown.
+      - MUST include jobs for ALL ${profile.preferredRoles.length} preferred roles
       `;
 
     const response = await ai.models.generateContent({
