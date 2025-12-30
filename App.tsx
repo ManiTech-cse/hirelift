@@ -1206,9 +1206,11 @@ function App() {
                 onFileSelect={setResumeFile}
                 onTextExtract={(text) => {
                   // Auto-fill resume text field when file is uploaded and professional summary is generated
-                  if (text && text.length > 20) {
+                  if (text && text.length > 30) {
                     setProfile(prev => ({ ...prev, resumeText: text }));
-                    showToast(`✅ Professional summary generated from your resume!`);
+                    showToast(`✅ Professional summary generated from your resume content!`);
+                  } else if (text) {
+                    showToast('⚠️ Could not extract enough information. Please edit or paste your resume summary manually.', 'error');
                   } else {
                     showToast('Resume uploaded but text extraction incomplete. Please write manually.', 'error');
                   }
@@ -1216,11 +1218,11 @@ function App() {
               />
 
               <TextArea
-                label="Professional Summary (Auto-generated from resume)"
+                label="Professional Summary (Generated from your resume)"
                 value={profile.resumeText}
                 onChange={e => setProfile({ ...profile, resumeText: e.target.value })}
                 className="font-mono text-xs sm:text-sm"
-                placeholder="Upload your resume above to auto-generate a professional summary like: 'Experienced Frontend Developer with 3 years of experience specializing in React, TypeScript, and Tailwind...'"
+                placeholder="Upload your resume above to auto-generate a professional summary based on your actual experience, skills, and achievements"
               /><div className="pt-4 border-t border-slate-100 flex justify-end">
                 <Button type="submit" isLoading={isMatching} className="w-full sm:w-auto px-8 text-sm">
                   {isMatching ? (
