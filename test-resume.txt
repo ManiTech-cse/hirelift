@@ -1,0 +1,29 @@
+John Smith
+Senior Frontend Developer
+
+PROFESSIONAL SUMMARY
+Experienced software engineer with 5 years building scalable web applications.
+Proficient in React, TypeScript, Node.js, and AWS cloud services.
+
+EXPERIENCE
+- Google (2020-2023): Senior Frontend Developer
+  Built React-based dashboard serving 10M+ users
+  Improved page load time by 40%
+  
+- Amazon (2018-2020): Frontend Developer
+  Developed AWS console features
+  Led team of 3 engineers
+
+SKILLS
+React, TypeScript, JavaScript, Node.js, AWS, Docker, 
+Tailwind CSS, Redux, Next.js, GraphQL, Git, Jest
+
+EDUCATION
+B.S. in Computer Science
+Massachusetts Institute of Technology (MIT)
+
+LOCATION
+San Francisco, CA
+
+PREFERENCES
+Open to remote opportunities

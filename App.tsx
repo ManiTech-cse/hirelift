@@ -61,9 +61,8 @@ function App() {
   const [suggestedPassword, setSuggestedPassword] = useState('');
   const [authErrors, setAuthErrors] = useState<{ name?: string, email?: string, password?: string, confirmPassword?: string }>({});
   const [landingSelectedJob, setLandingSelectedJob] = useState<Job | null>(null);
-  const [isMatching, setIsMatching] = useState(false);
-  const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [isMatching, setIsMatching] = useState(false);  const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error', duration?: number } | null>(null);
   const [applyingJobs, setApplyingJobs] = useState<Set<string>>(new Set());
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
   // New state for bot simulation
@@ -133,8 +132,7 @@ function App() {
     }
 
     try {
-      if (isRegisterMode) {
-        // Try to call register API
+      if (isRegisterMode) {        // Try to call register API
         try {
           const response = await register(authName, authEmail, authPassword);
           
@@ -145,7 +143,8 @@ function App() {
             name: response.user?.name || authName 
           }));
           
-          showToast('Account created successfully! Complete your profile.');
+          // Show browser alert
+          window.alert(`🎉 Welcome to HireLift, ${authName}!\n\nYour account has been created successfully.\nLet's build your profile!`);
         } catch (apiError) {
           console.warn('Backend API not available, continuing with local auth:', apiError);
           // Fallback: Continue without backend API
@@ -155,7 +154,8 @@ function App() {
             name: authName 
           }));
           
-          showToast('Account created! (Demo mode - no backend connected)');
+          // Show browser alert
+          window.alert(`🎉 Welcome to HireLift, ${authName}!\n\nYour account has been created successfully.\nLet's get started!`);
         }
         
         setAppState(AppState.PROFILE);
@@ -244,10 +244,9 @@ function App() {
       // In other states show profile or job details
       // Fall back to opening profile
       setAppState(AppState.PROFILE);
-    }
-  }; const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    }  }; const showToast = (message: string, type: 'success' | 'error' = 'success', duration: number = 4000) => {
+    setToast({ message, type, duration });
+    setTimeout(() => setToast(null), duration);
   };
   // Handle real job search - Fetches GENUINE jobs from company career pages
   const handleSearchJobs = async () => {
@@ -1116,9 +1115,31 @@ function App() {
                     preferredRoles: rolesArray 
                   }));
                 }}
+                onKeyDown={e => {
+                  // Allow Backspace to delete the last role when cursor is at the end
+                  if (e.key === 'Backspace' && rolesInput.endsWith(', ') && e.currentTarget.selectionStart === rolesInput.length) {
+                    e.preventDefault();
+                    // Remove the last comma and space
+                    const newValue = rolesInput.slice(0, -2);
+                    setRolesInput(newValue);
+                    const rolesArray = newValue
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(s => s.length > 0);
+                    setProfile(prev => ({ 
+                      ...prev, 
+                      preferredRoles: rolesArray 
+                    }));
+                  }
+                  // Allow Delete key to work normally
+                  else if (e.key === 'Delete') {
+                    // Let browser handle Delete naturally
+                    return;
+                  }
+                }}
                 placeholder="e.g. Frontend Developer, UI Engineer"
                 className="text-sm"
-              />              <Input
+              /><Input
                 label="Skills (Comma separated)"
                 value={skillsInput}
                 onChange={e => {
@@ -1134,6 +1155,28 @@ function App() {
                     ...prev, 
                     skills: skillsArray 
                   }));
+                }}
+                onKeyDown={e => {
+                  // Allow Backspace to delete the last skill when cursor is at the end
+                  if (e.key === 'Backspace' && skillsInput.endsWith(', ') && e.currentTarget.selectionStart === skillsInput.length) {
+                    e.preventDefault();
+                    // Remove the last comma and space
+                    const newValue = skillsInput.slice(0, -2);
+                    setSkillsInput(newValue);
+                    const skillsArray = newValue
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(s => s.length > 0);
+                    setProfile(prev => ({ 
+                      ...prev, 
+                      skills: skillsArray 
+                    }));
+                  }
+                  // Allow Delete key to work normally
+                  else if (e.key === 'Delete') {
+                    // Let browser handle Delete naturally
+                    return;
+                  }
                 }}
                 placeholder="e.g. React, Node.js, Python"
                 className="text-sm"
@@ -1455,11 +1498,12 @@ function App() {
             </div>
           </main>
 
-          {/* Toast Notification */}
-          {toast && (
-            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-2xl text-white transform transition-all duration-300 translate-y-0 z-50 flex items-center gap-2 text-xs sm:text-sm max-w-xs sm:max-w-sm ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-              {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-              <span className="font-medium">{toast.message}</span>
+          {/* Toast Notification */}          {toast && (
+            <div className={`fixed bottom-4 right-4 px-6 py-4 rounded-xl shadow-2xl text-white transform transition-all duration-500 translate-y-0 z-50 flex items-start gap-3 text-sm sm:text-base max-w-md sm:max-w-lg animate-slide-up ${toast.type === 'success' ? 'bg-gradient-to-r from-green-600 to-green-500' : 'bg-gradient-to-r from-red-600 to-red-500'}`}>
+              <div className="flex-shrink-0 mt-0.5">
+                {toast.type === 'success' ? <CheckCircle size={20} className="animate-bounce" /> : <AlertCircle size={20} />}
+              </div>
+              <span className="font-medium leading-relaxed">{toast.message}</span>
             </div>
           )}
 

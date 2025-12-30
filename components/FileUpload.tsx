@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Upload, FileText, X, CheckCircle } from 'lucide-react';
+import { extractResumeWithAI, ExtractedResumeData } from '../services/resumeExtractor';
 
 interface FileUploadProps {
   label: string;
@@ -50,18 +51,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
         if (fileExtension === 'txt' || selectedFile.type === 'text/plain') {
           // Plain text file
-          extractedText = await selectedFile.text();
-        } else if (fileExtension === 'pdf' || selectedFile.type === 'application/pdf') {
+          extractedText = await selectedFile.text();        } else if (fileExtension === 'pdf' || selectedFile.type === 'application/pdf') {
           // PDF file - extract text using FileReader
           extractedText = await extractTextFromPDF(selectedFile);
+          console.log('📄 PDF text extracted, length:', extractedText.length);
+          console.log('📝 First 500 chars:', extractedText.substring(0, 500));
         } else if (fileExtension === 'doc' || fileExtension === 'docx') {
           // DOC/DOCX file - for demo, show placeholder
           extractedText = await extractTextFromDOCX(selectedFile);
-        }
-
-        if (extractedText && extractedText.trim().length > 20) {
-          // Extract only key information instead of full text
-          const summarizedText = extractKeyResumeInfo(extractedText);
+        }        if (extractedText && extractedText.trim().length > 20) {
+          // Extract only key information instead of full text (AI-powered)
+          const summarizedText = await extractKeyResumeInfo(extractedText);
           onTextExtract(summarizedText);
           setExtractionSuccess(true);
         } else {
@@ -73,13 +73,127 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         setError('Failed to read file. Please paste your resume text manually.');
         setExtractionSuccess(false);
       } finally {
-        setIsProcessing(false);
+        setIsProcessing(false);      }
+    }
+  };
+
+  // Helper function to extract key information from resume text using AI
+  const extractKeyResumeInfo = async (fullText: string): Promise<string> => {
+    console.log('🔍 Starting AI-powered resume extraction...');
+    console.log('📄 Full resume text length:', fullText.length);
+    console.log('📝 Resume text preview (first 300 chars):', fullText.substring(0, 300));
+    
+    if (!fullText || fullText.trim().length < 50) {
+      console.warn('⚠️ Resume text too short');
+      return '';
+    }
+
+    try {
+      // Use AI to extract comprehensive resume information
+      const aiExtracted = await extractResumeWithAI(fullText);
+      
+      console.log('✅ AI Extraction Results:', {
+        name: aiExtracted.name || 'Not found',
+        role: aiExtracted.role || 'Not found',
+        experience: aiExtracted.experience || 'Not found',
+        skills: aiExtracted.skills.slice(0, 6).join(', ') || 'None',
+        education: aiExtracted.education || 'Not found',
+        companies: aiExtracted.companies.slice(0, 3).join(', ') || 'None',
+        achievements: aiExtracted.achievements.length,
+        location: aiExtracted.location || 'Not found',
+        summaryLength: aiExtracted.summary?.length || 0
+      });
+
+      // If AI provided a professional summary, use it
+      if (aiExtracted.summary && aiExtracted.summary.length > 50) {
+        console.log('✅ Using AI-generated summary:', aiExtracted.summary);
+        return aiExtracted.summary;
+      }
+
+      // Fallback: Build summary from AI-extracted data
+      console.log('⚠️ AI summary empty, building from extracted data...');
+      const summary = buildProfessionalSummaryFromAI(aiExtracted);
+      console.log('✅ Built summary from AI data:', summary);
+      return summary;    } catch (error) {
+      console.error('❌ AI extraction failed, falling back to pattern matching:', error);
+      
+      // Fallback to original pattern-based extraction
+      try {
+        const fallbackResult = extractKeyResumeInfoFallback(fullText);
+        if (fallbackResult && fallbackResult.length > 50) {
+          console.log('✅ Fallback extraction succeeded:', fallbackResult.substring(0, 100));
+          return fallbackResult;
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback extraction also failed:', fallbackError);
+      }
+      
+      // If both AI and fallback fail, return empty string so user can paste manually
+      console.warn('⚠️ Both AI and fallback extraction failed - returning empty');
+      return '';
+    }
+  };
+
+  // Build professional summary from AI-extracted data
+  const buildProfessionalSummaryFromAI = (data: ExtractedResumeData): string => {
+    const parts: string[] = [];
+
+    // Role and experience
+    if (data.role && data.experience) {
+      parts.push(`${data.role} with ${data.experience} of experience`);
+    } else if (data.role) {
+      parts.push(`${data.role}`);
+    } else if (data.skills.length > 0) {
+      parts.push(`${data.skills[0]} professional`);
+    }
+
+    // Skills
+    if (data.skills.length > 0) {
+      const topSkills = data.skills.slice(0, 6);
+      if (topSkills.length >= 4) {
+        const primary = topSkills.slice(0, 3).join(', ');
+        const secondary = topSkills.slice(3).join(', ');
+        parts.push(`Specializing in ${primary}, with expertise in ${secondary}`);
+      } else if (topSkills.length > 0) {
+        parts.push(`Strong skills in ${topSkills.join(', ')}`);
       }
     }
-  };  // Helper function to extract key information from resume text and generate professional summary
-  const extractKeyResumeInfo = (fullText: string): string => {
-    console.log('🔍 Starting enhanced resume extraction...');
-    console.log('📄 Full resume text length:', fullText.length);
+
+    // Companies
+    if (data.companies.length > 0) {
+      parts.push(`Previously worked at ${data.companies.slice(0, 3).join(', ')}`);
+    }
+
+    // Top achievement
+    if (data.achievements.length > 0) {
+      const achievement = data.achievements[0];
+      const shortAch = achievement.length > 120 
+        ? achievement.substring(0, 120) + '...' 
+        : achievement;
+      parts.push(shortAch);
+    }
+
+    // Education
+    if (data.education) {
+      parts.push(`Holds ${data.education}`);
+    }
+
+    // Location
+    if (data.location) {
+      parts.push(`Based in ${data.location}`);
+    }
+
+    let summary = parts.join('. ').replace(/\.\s*\./g, '.').trim();
+    if (summary && !summary.endsWith('.')) {
+      summary += '.';
+    }
+
+    return summary || 'Professional with diverse experience across multiple domains.';
+  };
+
+  // Fallback pattern-based extraction (original implementation)
+  const extractKeyResumeInfoFallback = (fullText: string): string => {
+    console.log('🔄 Using fallback pattern-based extraction...');
     
     if (!fullText || fullText.trim().length < 50) {
       console.warn('⚠️ Resume text too short');
